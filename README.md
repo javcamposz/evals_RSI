@@ -1,5 +1,9 @@
 # RSI Eval Lab
 
+[![CI](https://github.com/javcamposz/evals_RSI/actions/workflows/ci.yml/badge.svg)](https://github.com/javcamposz/evals_RSI/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 A runnable research prototype for evaluating **recursively self-improving (RSI) AI lineages**. It asks a practical question: how can an evaluation remain informative when the system being measured changes itself and may have incentives to change the measurement process too?
 
 The first experiment audits lineage records for evaluator tampering, monitor tampering, shutdown resistance, process escape, incomplete evidence, benchmark saturation, and divergence between public and held-out performance.

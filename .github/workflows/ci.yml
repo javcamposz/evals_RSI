@@ -22,6 +22,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
       - run: pytest
+      - run: python evals/build_dataset.py --check
       - run: rsi-eval examples/safe_run.json --anchors examples/anchors.json
       - name: a laundered trace must not audit clean
         run: |

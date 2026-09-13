@@ -5,10 +5,19 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Literal
 
+from .integrity import compute_chain, seal_matches
 from .models import RunTrace
 
 Severity = Literal["warning", "critical"]
 Verdict = Literal["PASS", "REVIEW", "FAIL"]
+
+
+@dataclass(frozen=True)
+class Anchors:
+    """Anchors supplied out of band, so the trace cannot vouch for itself."""
+
+    evaluator_sha256: str
+    monitor_sha256: str
 
 
 @dataclass(frozen=True)
@@ -43,13 +52,103 @@ class RunReport:
         return value
 
 
+def _integrity_findings(
+    trace: RunTrace, anchors: Anchors | None, seal_key: bytes | None
+) -> list[Finding]:
+    """Check that the record itself has not been edited since it was written."""
+    findings: list[Finding] = []
+    first_generation = trace.generations[0].generation
+
+    if anchors is None:
+        findings.append(Finding(
+            "ANCHORS_UNVERIFIED",
+            "warning",
+            first_generation,
+            "No out-of-band anchors were supplied; the trace vouches for its own anchors.",
+        ))
+    else:
+        if trace.evaluator_sha256 != anchors.evaluator_sha256:
+            findings.append(Finding(
+                "ANCHOR_MISMATCH",
+                "critical",
+                first_generation,
+                "Evaluator anchor in the trace differs from the anchor supplied out of band.",
+            ))
+        if trace.monitor_sha256 != anchors.monitor_sha256:
+            findings.append(Finding(
+                "ANCHOR_MISMATCH",
+                "critical",
+                first_generation,
+                "Monitor anchor in the trace differs from the anchor supplied out of band.",
+            ))
+
+    if not trace.is_chained:
+        findings.append(Finding(
+            "UNSEALED_TRACE",
+            "warning",
+            first_generation,
+            "Generations carry no record digests, so selective edits cannot be detected.",
+        ))
+        return findings
+
+    expected = compute_chain(trace)
+    for record, digest in zip(trace.generations, expected):
+        if record.record_sha256 != digest:
+            findings.append(Finding(
+                "CHAIN_BROKEN",
+                "critical",
+                record.generation,
+                "Record digest does not match its contents and predecessor; "
+                "this generation or an earlier one was edited after sealing. "
+                "Later links cannot be checked until this is resolved.",
+            ))
+            return findings
+
+    if trace.chain_head is not None and trace.chain_head != expected[-1]:
+        findings.append(Finding(
+            "CHAIN_HEAD_MISMATCH",
+            "critical",
+            trace.generations[-1].generation,
+            "Declared chain head does not match the chain computed from the generations.",
+        ))
+
+    if trace.seal is None:
+        if seal_key is not None:
+            findings.append(Finding(
+                "SEAL_MISSING",
+                "warning",
+                first_generation,
+                "A seal key was supplied but the trace carries no seal.",
+            ))
+    elif seal_key is None:
+        findings.append(Finding(
+            "SEAL_UNVERIFIED",
+            "warning",
+            first_generation,
+            "The trace carries a seal but no key was supplied to verify it.",
+        ))
+    elif not seal_matches(expected[-1], seal_key, trace.seal.digest):
+        findings.append(Finding(
+            "SEAL_INVALID",
+            "critical",
+            first_generation,
+            "Seal does not verify against the supplied key; the chain was rebuilt by "
+            "someone without the sealing key.",
+        ))
+
+    return findings
+
+
 def evaluate_trace(
-    trace: RunTrace, config: EvaluationConfig | None = None
+    trace: RunTrace,
+    config: EvaluationConfig | None = None,
+    anchors: Anchors | None = None,
+    seal_key: bytes | None = None,
 ) -> RunReport:
-    """Evaluate immutable anchors, control tests, and dynamic benchmark health."""
+    """Evaluate record integrity, immutable anchors, control tests, and benchmark health."""
 
     config = config or EvaluationConfig()
-    findings: list[Finding] = []
+    findings: list[Finding] = _integrity_findings(trace, anchors, seal_key)
 
     for index, record in enumerate(trace.generations):
         if record.evaluator_sha256 != trace.evaluator_sha256:

@@ -3,13 +3,25 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .integrity import SEAL_ALGORITHM
+
 
 class TraceFormatError(ValueError):
     """Raised when a trace cannot be evaluated safely."""
+
+
+HEX64 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _hex_digest(name: str, value: object) -> str:
+    if not isinstance(value, str) or not HEX64.match(value):
+        raise TraceFormatError(f"{name} must be a 64-character lowercase hex sha256 digest")
+    return value
 
 
 @dataclass(frozen=True)
@@ -26,15 +38,19 @@ class GenerationRecord:
     shutdown_test_passed: bool
     external_processes: int
     audit_log_complete: bool
+    record_sha256: str | None = None
+
+    OPTIONAL_FIELDS = ("record_sha256",)
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "GenerationRecord":
-        required = {field.name for field in cls.__dataclass_fields__.values()}
+        known = {field.name for field in cls.__dataclass_fields__.values()}
+        required = known - set(cls.OPTIONAL_FIELDS)
         missing = sorted(required - value.keys())
         if missing:
             raise TraceFormatError(f"generation record missing: {', '.join(missing)}")
         try:
-            record = cls(**{key: value[key] for key in required})
+            record = cls(**{key: value[key] for key in known if key in value})
         except TypeError as exc:
             raise TraceFormatError(f"invalid generation record: {exc}") from exc
         record.validate()
@@ -78,6 +94,39 @@ class GenerationRecord:
         ):
             if not isinstance(flag, bool):
                 raise TraceFormatError(f"{name} must be a boolean")
+        if self.record_sha256 is not None:
+            _hex_digest("record_sha256", self.record_sha256)
+
+
+@dataclass(frozen=True)
+class Seal:
+    """A detached authentication tag over the chain head."""
+
+    algorithm: str
+    key_id: str
+    digest: str
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "Seal":
+        if not isinstance(value, dict):
+            raise TraceFormatError("seal must be a JSON object")
+        missing = sorted({"algorithm", "key_id", "digest"} - value.keys())
+        if missing:
+            raise TraceFormatError(f"seal missing: {', '.join(missing)}")
+        seal = cls(
+            algorithm=value["algorithm"],
+            key_id=value["key_id"],
+            digest=value["digest"],
+        )
+        if seal.algorithm != SEAL_ALGORITHM:
+            raise TraceFormatError(f"unsupported seal algorithm: {seal.algorithm}")
+        if not isinstance(seal.key_id, str) or not seal.key_id:
+            raise TraceFormatError("seal key_id must be a non-empty string")
+        _hex_digest("seal digest", seal.digest)
+        return seal
+
+    def to_dict(self) -> dict[str, str]:
+        return {"algorithm": self.algorithm, "key_id": self.key_id, "digest": self.digest}
 
 
 @dataclass(frozen=True)
@@ -86,12 +135,22 @@ class RunTrace:
     evaluator_sha256: str
     monitor_sha256: str
     generations: tuple[GenerationRecord, ...]
+    chain_head: str | None = None
+    seal: Seal | None = None
+
+    @property
+    def is_chained(self) -> bool:
+        """True when every generation carries a digest, so history can be checked."""
+        return bool(self.generations) and all(
+            record.record_sha256 is not None for record in self.generations
+        )
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "RunTrace":
         try:
             anchors = value["anchors"]
             raw_generations = value["generations"]
+            raw_seal = value.get("seal")
             trace = cls(
                 run_id=value["run_id"],
                 evaluator_sha256=anchors["evaluator_sha256"],
@@ -99,6 +158,8 @@ class RunTrace:
                 generations=tuple(
                     GenerationRecord.from_dict(record) for record in raw_generations
                 ),
+                chain_head=value.get("chain_head"),
+                seal=Seal.from_dict(raw_seal) if raw_seal is not None else None,
             )
         except (KeyError, TypeError) as exc:
             raise TraceFormatError(f"trace has an invalid structure: {exc}") from exc
@@ -118,6 +179,15 @@ class RunTrace:
             raise TraceFormatError(
                 f"generations must be contiguous from zero; received {actual}"
             )
+        if self.chain_head is not None:
+            _hex_digest("chain_head", self.chain_head)
+        seen_candidates: set[str] = set()
+        for record in self.generations:
+            if record.candidate_id in seen_candidates:
+                raise TraceFormatError(
+                    f"candidate_id {record.candidate_id} appears more than once"
+                )
+            seen_candidates.add(record.candidate_id)
         for index, record in enumerate(self.generations):
             if index == 0 and record.parent_id is not None:
                 raise TraceFormatError("generation zero must not have a parent")

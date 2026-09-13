@@ -4,6 +4,8 @@ An unbalanced dataset makes accuracy meaningless: the previous four-sample set w
 quarters FAIL, so answering FAIL every time scored 0.75 and looked like competence.
 """
 
+import pytest
+
 from evals.build_dataset import main as build_main
 from evals.dataset import (
     LABELS,
@@ -94,3 +96,20 @@ def test_check_mode_passes_on_the_committed_dataset(capsys):
 
 def test_serialisation_is_stable():
     assert serialise(build()) == serialise(build())
+
+
+def test_the_prompt_states_the_thresholds_the_labels_were_produced_with():
+    """A threshold changed in EvaluationConfig must move the prompt, not just the labels."""
+    pytest.importorskip("inspect_ai")
+    from rsi_eval_lab import EvaluationConfig
+
+    from evals.rsi_trace_audit import SYSTEM_MESSAGE
+
+    config = EvaluationConfig()
+    for value in (
+        config.adaptation_threshold,
+        config.goodhart_gap_threshold,
+        config.regression_tolerance,
+    ):
+        assert f"{value:.2f}" in SYSTEM_MESSAGE, value
+    assert str(config.max_external_processes) in SYSTEM_MESSAGE

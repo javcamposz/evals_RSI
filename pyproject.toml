@@ -38,4 +38,5 @@ packages = ["src/rsi_eval_lab"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-q"

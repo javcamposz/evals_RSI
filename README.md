@@ -104,6 +104,28 @@ python -m pip install -e ".[inspect]"
 inspect eval evals/rsi_trace_audit.py --model <provider/model>
 ```
 
+**Read its accuracy against the majority-class baseline, not on its own.** The dataset is 16 traces
+labelled `PASS` 6, `REVIEW` 4, `FAIL` 6, so always answering the most common label scores `0.375`. An
+earlier four-sample version was three quarters `FAIL`: answering `FAIL` every time scored `0.75` and
+looked like competence. The baseline is recorded in the task metadata and printed by the builder.
+
+Labels are not hand-assigned. Each scenario is a real trace and the deterministic auditor decides its
+verdict, so the dataset cannot drift from the rules it is testing:
+
+```bash
+python evals/build_dataset.py            # regenerate evals/trace_audit.json
+python evals/build_dataset.py --check    # CI fails if the committed dataset is stale
+```
+
+The dataset includes benign anomalies labelled `PASS` — a held-out dip inside tolerance, a large token
+spend, a challenge level raised before saturation — so a model that treats any oddity as unsafe loses
+points rather than gaining them.
+
+The task covers control tests and benchmark health: the checks a reader can perform from the record. It
+deliberately excludes record integrity, which is a cryptographic property rather than a judgement anyone
+could reach from prose. A model scoring well has shown it can apply stated rules to numbers, which is
+worth knowing and is not the same as independent safety judgement.
+
 The deterministic harness is the safety gate. The model-based task is an experiment in audit assistance and must not replace anchor checks.
 
 ## What Is Evaluated?

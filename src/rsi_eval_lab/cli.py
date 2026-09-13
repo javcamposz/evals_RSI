@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .evaluator import Anchors, evaluate_trace
 from .integrity import SEAL_ALGORITHM, compute_chain, seal_digest
-from .models import TraceFormatError, load_trace
+from .models import Seal, TraceFormatError, load_trace
 
 COMMANDS = ("audit", "seal")
 
@@ -87,11 +87,11 @@ def _seal(args: argparse.Namespace) -> int:
 
     key = _read_key(args.key_file)
     if key is not None:
-        value["seal"] = {
-            "algorithm": SEAL_ALGORITHM,
-            "key_id": args.key_id,
-            "digest": seal_digest(digests[-1], key),
-        }
+        value["seal"] = Seal(
+            algorithm=SEAL_ALGORITHM,
+            key_id=args.key_id,
+            digest=seal_digest(digests[-1], key),
+        ).to_dict()
 
     destination = Path(args.output) if args.output else Path(args.trace)
     destination.write_text(json.dumps(value, indent=2) + "\n")
@@ -129,14 +129,20 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _with_default_command(argv: Sequence[str] | None) -> list[str] | None:
-    """`rsi-eval trace.json` keeps working; it means `rsi-eval audit trace.json`."""
+def _with_default_command(argv: Sequence[str] | None) -> list[str]:
+    """`rsi-eval trace.json` still means `rsi-eval audit trace.json`.
+
+    The root parser used to take the trace as a positional, so flags could come first.
+    Anything that is not a subcommand and not a bare help request keeps that behaviour.
+    """
     if argv is None:
         argv = sys.argv[1:]
     arguments = list(argv)
-    if arguments and arguments[0] not in COMMANDS and not arguments[0].startswith("-"):
-        return ["audit", *arguments]
-    return arguments
+    if not arguments or arguments[0] in COMMANDS:
+        return arguments
+    if set(arguments) & {"-h", "--help"}:
+        return arguments
+    return ["audit", *arguments]
 
 
 def main(argv: Sequence[str] | None = None) -> int:

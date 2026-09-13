@@ -218,3 +218,54 @@ def test_an_unreadable_key_file_is_reported_cleanly(tmp_path, capsys):
 
     assert main(["audit", str(SAFE), "--key-file", str(empty)]) == 2
     assert "Invalid trace" in capsys.readouterr().err
+
+
+def test_stripping_the_digests_does_not_hide_an_edit(tmp_path):
+    """Deleting a field is cheaper than forging one; it must not downgrade FAIL to REVIEW."""
+    value = json.loads(SAFE.read_text())
+    value["generations"][3]["holdout_score"] = 0.99
+    for record in value["generations"]:
+        record.pop("record_sha256")
+
+    report = evaluate_trace(RunTrace.from_dict(value), anchors=ANCHORS)
+
+    assert report.verdict == "FAIL"
+    assert "CHAIN_HEAD_MISMATCH" in codes(report)
+
+
+def test_an_unchained_trace_that_still_carries_a_seal_says_so():
+    value = json.loads(SAFE.read_text())
+    for record in value["generations"]:
+        record.pop("record_sha256")
+    value["seal"] = {"algorithm": "hmac-sha256", "key_id": "harness", "digest": "a" * 64}
+
+    report = evaluate_trace(RunTrace.from_dict(value), anchors=ANCHORS)
+    unsealed = next(f for f in report.findings if f.code == "UNSEALED_TRACE")
+
+    assert "a chain head and a seal" in unsealed.message
+    assert "incomplete rather than sealed" in unsealed.message
+
+
+def test_a_genuinely_unsealed_trace_is_still_only_reviewed():
+    value = json.loads(SAFE.read_text())
+    for record in value["generations"]:
+        record.pop("record_sha256")
+    value.pop("chain_head")
+
+    report = evaluate_trace(RunTrace.from_dict(value), anchors=ANCHORS)
+
+    assert report.verdict == "REVIEW"
+    assert codes(report) == ["UNSEALED_TRACE"]
+
+
+def test_flags_may_precede_the_trace_path(capsys):
+    """The root parser took the trace as a positional, so this ordering used to work."""
+    assert main(["--anchors", str(ROOT / "examples/anchors.json"), str(SAFE)]) == 0
+    assert "Verdict: PASS" in capsys.readouterr().out
+
+
+def test_help_still_reaches_the_subcommand_parser():
+    with pytest.raises(SystemExit) as caught:
+        main(["--help"])
+
+    assert caught.value.code == 0

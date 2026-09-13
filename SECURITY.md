@@ -17,6 +17,10 @@ This repository evaluates recorded lineage metadata. It does not execute candida
 
 A matching hash does not prove that an anchor is trustworthy. A complete log does not prove that every action was observed. The current checks are a research prototype, not a deployment safety case or containment system.
 
+Deleting the per-generation digests does not hide an edit. The chain head is computable from the
+generations alone, so it is checked even when the digests are absent, and a trace that still carries a
+chain head or a seal without them is reported as incomplete rather than merely unsealed.
+
 The hash chain detects selective edits, not wholesale fabrication: anyone holding the trace can recompute
 every digest, so an unsealed chain proves only internal consistency. The detached HMAC seal raises that
 bar to possession of the key, which is why the key must be held by the harness rather than written next to

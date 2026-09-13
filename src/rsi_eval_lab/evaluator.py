@@ -82,16 +82,43 @@ def _integrity_findings(
                 "Monitor anchor in the trace differs from the anchor supplied out of band.",
             ))
 
+    expected = compute_chain(trace)
+
+    def head_mismatch() -> Finding | None:
+        if trace.chain_head is not None and trace.chain_head != expected[-1]:
+            return Finding(
+                "CHAIN_HEAD_MISMATCH",
+                "critical",
+                trace.generations[-1].generation,
+                "Declared chain head does not match the chain computed from the generations.",
+            )
+        return None
+
     if not trace.is_chained:
+        # The head is computable from the generations alone, so check it even with the
+        # per-record digests gone. Stripping a field is cheaper than forging one, and must
+        # not be the way to turn a FAIL into a REVIEW.
+        stripped = head_mismatch()
+        if stripped is not None:
+            findings.append(stripped)
+        carried = [
+            name for name, present in
+            (("a chain head", trace.chain_head is not None), ("a seal", trace.seal is not None))
+            if present
+        ]
+        detail = (
+            f" It still carries {' and '.join(carried)}, which cannot be reconciled with "
+            "missing digests; treat the record as incomplete rather than sealed."
+            if carried else ""
+        )
         findings.append(Finding(
             "UNSEALED_TRACE",
             "warning",
             first_generation,
-            "Generations carry no record digests, so selective edits cannot be detected.",
+            "Generations carry no record digests, so selective edits cannot be detected." + detail,
         ))
         return findings
 
-    expected = compute_chain(trace)
     for record, digest in zip(trace.generations, expected):
         if record.record_sha256 != digest:
             findings.append(Finding(
@@ -104,13 +131,9 @@ def _integrity_findings(
             ))
             return findings
 
-    if trace.chain_head is not None and trace.chain_head != expected[-1]:
-        findings.append(Finding(
-            "CHAIN_HEAD_MISMATCH",
-            "critical",
-            trace.generations[-1].generation,
-            "Declared chain head does not match the chain computed from the generations.",
-        ))
+    broken_head = head_mismatch()
+    if broken_head is not None:
+        findings.append(broken_head)
 
     if trace.seal is None:
         if seal_key is not None:

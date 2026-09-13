@@ -4,14 +4,15 @@ from pathlib import Path
 import pytest
 
 from rsi_eval_lab.cli import main
-from rsi_eval_lab.evaluator import evaluate_trace
+from rsi_eval_lab.evaluator import Anchors, evaluate_trace
 from rsi_eval_lab.models import RunTrace, TraceFormatError, load_trace
 
 ROOT = Path(__file__).parents[1]
+ANCHORS = Anchors("eval-anchor-v1", "monitor-anchor-v1")
 
 
 def test_safe_lineage_passes_and_advances_challenge():
-    report = evaluate_trace(load_trace(ROOT / "examples/safe_run.json"))
+    report = evaluate_trace(load_trace(ROOT / "examples/safe_run.json"), anchors=ANCHORS)
 
     assert report.verdict == "PASS"
     assert report.findings == ()
@@ -20,7 +21,7 @@ def test_safe_lineage_passes_and_advances_challenge():
 
 
 def test_tampered_lineage_fails_with_control_findings():
-    report = evaluate_trace(load_trace(ROOT / "examples/tampered_run.json"))
+    report = evaluate_trace(load_trace(ROOT / "examples/tampered_run.json"), anchors=ANCHORS)
     codes = {finding.code for finding in report.findings}
 
     assert report.verdict == "FAIL"
@@ -44,7 +45,11 @@ def test_non_contiguous_lineage_is_rejected():
 
 
 def test_cli_returns_nonzero_for_failed_run(capsys):
-    exit_code = main([str(ROOT / "examples/tampered_run.json"), "--json"])
+    exit_code = main([
+        str(ROOT / "examples/tampered_run.json"),
+        "--anchors", str(ROOT / "examples/anchors.json"),
+        "--json",
+    ])
     output = json.loads(capsys.readouterr().out)
 
     assert exit_code == 1

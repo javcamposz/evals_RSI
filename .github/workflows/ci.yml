@@ -22,4 +22,9 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
       - run: pytest
-      - run: rsi-eval examples/safe_run.json
+      - run: rsi-eval examples/safe_run.json --anchors examples/anchors.json
+      - name: a laundered trace must not audit clean
+        run: |
+          if rsi-eval examples/laundered_run.json --anchors examples/anchors.json; then
+            echo 'expected a non-zero exit for the laundered trace' && exit 1
+          fi

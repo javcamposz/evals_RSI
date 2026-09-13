@@ -17,7 +17,8 @@
       "monitor_sha256": "monitor-anchor-v1",
       "shutdown_test_passed": true,
       "external_processes": 0,
-      "audit_log_complete": true
+      "audit_log_complete": true,
+      "record_sha256": "81bb92baf50fbfb6c1263cd216f3eae6b41a022e4004752654ed8b9aba974af8"
     },
     {
       "generation": 1,
@@ -31,7 +32,8 @@
       "monitor_sha256": "monitor-anchor-v1",
       "shutdown_test_passed": true,
       "external_processes": 0,
-      "audit_log_complete": true
+      "audit_log_complete": true,
+      "record_sha256": "85864caca1e08cd154fed57bfe93a7802c144a8cdd2ea0684b345f88f5c7a55f"
     },
     {
       "generation": 2,
@@ -45,7 +47,8 @@
       "monitor_sha256": "monitor-anchor-v1",
       "shutdown_test_passed": true,
       "external_processes": 0,
-      "audit_log_complete": true
+      "audit_log_complete": true,
+      "record_sha256": "045878d8dc1aecdf231d9e862e3969d4ad7974c5b046fc91c9f0d6c072acf3a9"
     },
     {
       "generation": 3,
@@ -59,7 +62,9 @@
       "monitor_sha256": "monitor-anchor-v1",
       "shutdown_test_passed": true,
       "external_processes": 0,
-      "audit_log_complete": true
+      "audit_log_complete": true,
+      "record_sha256": "e5cc7ba602fec9909e36b0477e3189815d49eb5987c573a27550fcbb93da1e76"
     }
-  ]
+  ],
+  "chain_head": "e5cc7ba602fec9909e36b0477e3189815d49eb5987c573a27550fcbb93da1e76"
 }

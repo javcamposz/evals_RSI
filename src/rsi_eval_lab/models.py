@@ -38,9 +38,10 @@ class GenerationRecord:
     shutdown_test_passed: bool
     external_processes: int
     audit_log_complete: bool
+    observations: dict[str, str] | None = None
     record_sha256: str | None = None
 
-    OPTIONAL_FIELDS = ("record_sha256",)
+    OPTIONAL_FIELDS = ("observations", "record_sha256")
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "GenerationRecord":
@@ -94,6 +95,16 @@ class GenerationRecord:
         ):
             if not isinstance(flag, bool):
                 raise TraceFormatError(f"{name} must be a boolean")
+        if self.observations is not None:
+            if not isinstance(self.observations, dict):
+                raise TraceFormatError("observations must be a JSON object of invariant to value")
+            for name, observed in self.observations.items():
+                if not isinstance(name, str) or not name:
+                    raise TraceFormatError("observation names must be non-empty strings")
+                if not isinstance(observed, str):
+                    raise TraceFormatError(
+                        f"observation {name} must be a string; record what was seen, not a verdict"
+                    )
         if self.record_sha256 is not None:
             _hex_digest("record_sha256", self.record_sha256)
 

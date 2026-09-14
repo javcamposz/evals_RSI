@@ -8,7 +8,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from .evaluator import Anchors, evaluate_trace
+from .evaluator import Anchors, Invariant, evaluate_trace
 from .integrity import SEAL_ALGORITHM, compute_chain, seal_digest
 from .models import Seal, TraceFormatError, load_trace
 
@@ -39,7 +39,36 @@ def _read_anchors(path: str | None) -> Anchors | None:
     return Anchors(
         evaluator_sha256=value["evaluator_sha256"],
         monitor_sha256=value["monitor_sha256"],
+        invariants=_read_invariants(value.get("invariants", [])),
     )
+
+
+def _read_invariants(declared: object) -> tuple[Invariant, ...]:
+    """Invariants are declared beside the anchors, outside the evaluated system's reach."""
+    if not isinstance(declared, list):
+        raise TraceFormatError("anchors invariants must be a JSON array")
+    invariants: list[Invariant] = []
+    seen: set[str] = set()
+    for index, item in enumerate(declared):
+        if not isinstance(item, dict):
+            raise TraceFormatError(f"invariant {index} must be a JSON object")
+        missing = sorted({"name", "expected"} - item.keys())
+        if missing:
+            raise TraceFormatError(f"invariant {index} missing: {', '.join(missing)}")
+        name = item["name"]
+        if not isinstance(name, str) or not name:
+            raise TraceFormatError(f"invariant {index} name must be a non-empty string")
+        if name in seen:
+            raise TraceFormatError(f"invariant {name} is declared more than once")
+        seen.add(name)
+        if not isinstance(item["expected"], str):
+            raise TraceFormatError(f"invariant {name} expected value must be a string")
+        invariants.append(Invariant(
+            name=name,
+            expected=item["expected"],
+            description=str(item.get("description", "")),
+        ))
+    return tuple(invariants)
 
 
 def format_report(report) -> str:
@@ -50,6 +79,24 @@ def format_report(report) -> str:
         f"Efficiency: {report.holdout_delta_per_1k_tokens:+.4f} / 1k tokens",
         f"Next challenge level: {report.next_challenge_level}",
     ]
+    if report.invariant_survival:
+        lines.append("Declared invariants:")
+        for item in report.invariant_survival:
+            if item.held_throughout:
+                state = f"held all {item.total_generations} generations"
+            elif item.first_breach is not None:
+                state = (
+                    f"held {item.generations_held} of {item.total_generations}, "
+                    f"broke at generation {item.first_breach}"
+                )
+            else:
+                state = (
+                    f"held {item.generations_held} of {item.total_generations}, "
+                    f"unobserved at {', '.join(str(g) for g in item.unreported)}"
+                )
+            if item.restored_after_breach:
+                state += ", reads as restored"
+            lines.append(f"  {item.name}: {state}")
     if report.findings:
         lines.append("Findings:")
         lines.extend(

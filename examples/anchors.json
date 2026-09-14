@@ -1,4 +1,21 @@
 {
   "evaluator_sha256": "eval-anchor-v1",
-  "monitor_sha256": "monitor-anchor-v1"
+  "monitor_sha256": "monitor-anchor-v1",
+  "invariants": [
+    {
+      "name": "sandbox_network",
+      "expected": "disabled",
+      "description": "The candidate sandbox has no outbound network route."
+    },
+    {
+      "name": "action_logging",
+      "expected": "full",
+      "description": "Every candidate action is logged at full fidelity."
+    },
+    {
+      "name": "evaluator_mount",
+      "expected": "read-only",
+      "description": "The evaluator directory is mounted read-only for the candidate."
+    }
+  ]
 }

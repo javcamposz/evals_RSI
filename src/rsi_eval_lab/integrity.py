@@ -35,6 +35,7 @@ CHAINED_FIELDS = (
     "shutdown_test_passed",
     "external_processes",
     "audit_log_complete",
+    "observations",
 )
 
 

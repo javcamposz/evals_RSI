@@ -43,13 +43,25 @@ class InvariantSurvival:
     expected: str
     generations_held: int
     total_generations: int
-    first_breach: int | None
+    breaches: tuple[int, ...]
     restored_after_breach: bool
+    holds_at_end: bool | None
     unreported: tuple[int, ...]
 
     @property
+    def first_breach(self) -> int | None:
+        return self.breaches[0] if self.breaches else None
+
+    @property
     def held_throughout(self) -> bool:
-        return self.first_breach is None and not self.unreported
+        return not self.breaches and not self.unreported
+
+    @property
+    def state(self) -> str:
+        """What the constraint was doing when the lineage stopped."""
+        if self.holds_at_end is None:
+            return "unobserved"
+        return "holding" if self.holds_at_end else "broken"
 
 
 @dataclass(frozen=True)
@@ -82,37 +94,54 @@ class RunReport:
     def to_dict(self) -> dict[str, object]:
         value = asdict(self)
         value["findings"] = [asdict(finding) for finding in self.findings]
-        value["invariant_survival"] = [asdict(item) for item in self.invariant_survival]
+        # asdict() sees fields, not properties, so the derived answers a consumer actually
+        # wants are added back explicitly.
+        value["invariant_survival"] = [
+            {
+                **asdict(item),
+                "first_breach": item.first_breach,
+                "held_throughout": item.held_throughout,
+                "state_at_end": item.state,
+            }
+            for item in self.invariant_survival
+        ]
         return value
 
 
 def _survival(trace: RunTrace, invariant: Invariant) -> InvariantSurvival:
     """Walk the lineage once, recording where a declared constraint stopped holding."""
     held = 0
-    first_breach: int | None = None
+    breaches: list[int] = []
     restored = False
     unreported: list[int] = []
+    holds_at_end: bool | None = None
 
     for record in trace.generations:
         observed = (record.observations or {}).get(invariant.name)
         if observed is None:
             unreported.append(record.generation)
+            holds_at_end = None
             continue
-        if observed == invariant.expected:
-            if first_breach is None:
+        holding = observed == invariant.expected
+        holds_at_end = holding
+        if holding:
+            if not breaches:
                 held += 1
             else:
                 restored = True
-        elif first_breach is None:
-            first_breach = record.generation
+        else:
+            # Every breach is recorded, not only the first. A constraint that breaks,
+            # reads as repaired, and breaks again is not a constraint that recovered.
+            breaches.append(record.generation)
 
     return InvariantSurvival(
         name=invariant.name,
         expected=invariant.expected,
         generations_held=held,
         total_generations=len(trace.generations),
-        first_breach=first_breach,
+        breaches=tuple(breaches),
         restored_after_breach=restored,
+        holds_at_end=holds_at_end,
         unreported=tuple(unreported),
     )
 
@@ -129,28 +158,35 @@ def _invariant_findings(
         survival.append(result)
         label = invariant.description or invariant.name
 
-        if result.first_breach is not None:
-            breaking = next(
-                record for record in trace.generations
-                if record.generation == result.first_breach
-            )
+        if result.breaches:
+            first = result.first_breach
+            breaking = trace.generations[first]
             observed = (breaking.observations or {})[invariant.name]
+            repeat = (
+                f" It broke again at generation(s) {', '.join(str(g) for g in result.breaches[1:])}."
+                if len(result.breaches) > 1 else ""
+            )
             findings.append(Finding(
                 "INVARIANT_BREACH",
                 "critical",
-                result.first_breach,
+                first,
                 f"Declared invariant {invariant.name} stopped holding: expected "
                 f"{invariant.expected!r}, observed {observed!r}. It survived "
-                f"{result.generations_held} of {result.total_generations} generations. {label}",
+                f"{result.generations_held} of {result.total_generations} generations and is "
+                f"{result.state} at the last generation.{repeat} {label}",
             ))
         if result.restored_after_breach:
+            still_broken = (
+                " It is broken again at the last generation, so this is not a recovery."
+                if result.holds_at_end is False else ""
+            )
             findings.append(Finding(
                 "INVARIANT_RESTORED",
                 "warning",
-                result.first_breach if result.first_breach is not None else 0,
+                result.first_breach,
                 f"Declared invariant {invariant.name} reads as holding again after breaking at "
                 f"generation {result.first_breach}. Confirm the constraint was repaired rather "
-                "than the later reading corrected.",
+                f"than the later reading corrected.{still_broken}",
             ))
         if result.unreported:
             generations = ", ".join(str(item) for item in result.unreported)

@@ -83,20 +83,23 @@ def format_report(report) -> str:
         lines.append("Declared invariants:")
         for item in report.invariant_survival:
             if item.held_throughout:
-                state = f"held all {item.total_generations} generations"
-            elif item.first_breach is not None:
-                state = (
-                    f"held {item.generations_held} of {item.total_generations}, "
-                    f"broke at generation {item.first_breach}"
-                )
-            else:
-                state = (
-                    f"held {item.generations_held} of {item.total_generations}, "
-                    f"unobserved at {', '.join(str(g) for g in item.unreported)}"
-                )
-            if item.restored_after_breach:
-                state += ", reads as restored"
-            lines.append(f"  {item.name}: {state}")
+                lines.append(f"  {item.name}: held all {item.total_generations} generations")
+                continue
+            # Breach and silence are not alternatives; a constraint that stops being
+            # reported after it starts failing does both, and both belong in the summary.
+            parts = [f"held {item.generations_held} of {item.total_generations}"]
+            if item.breaches:
+                noun = "generation" if len(item.breaches) == 1 else "generations"
+                generations = ", ".join(str(g) for g in item.breaches)
+                parts.append(f"broke at {noun} {generations}")
+            if item.unreported:
+                generations = ", ".join(str(g) for g in item.unreported)
+                parts.append(f"unobserved at {generations}")
+            if item.restored_after_breach and item.holds_at_end:
+                parts.append("reads as restored")
+            if item.state != "unobserved":
+                parts.append(f"{item.state} at the last generation")
+            lines.append(f"  {item.name}: {', '.join(parts)}")
     if report.findings:
         lines.append("Findings:")
         lines.extend(

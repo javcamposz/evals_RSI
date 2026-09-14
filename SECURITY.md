@@ -10,6 +10,8 @@ This repository evaluates recorded lineage metadata. It does not execute candida
   chain whose root commits to the run anchors.
 - The sealing key must live where the evaluated system cannot read it. A key stored beside the trace
   protects nothing.
+- Declared invariants are read from the anchors file, never from the trace, for the same reason the
+  anchors are: a system that declares its own constraints declares the ones it already satisfies.
 - The deterministic auditor has no model or network dependency.
 - The included traces are synthetic and contain no production data.
 
@@ -25,7 +27,9 @@ The hash chain detects selective edits, not wholesale fabrication: anyone holdin
 every digest, so an unsealed chain proves only internal consistency. The detached HMAC seal raises that
 bar to possession of the key, which is why the key must be held by the harness rather than written next to
 the run. Neither construction proves the recorded values were ever true; both only prove the record has
-not changed since it was sealed. An append-only log written by the harness, or a signature from a key in
+not changed since it was sealed. That limit applies to invariant observations too: the chain proves an
+observation was not edited afterwards, not that the constraint was ever actually measured. An invariant
+reported as holding by a system that never checked it reads exactly like one that held. An append-only log written by the harness, or a signature from a key in
 hardware, would be the next step, and neither is implemented here.
 
 Report security concerns privately to the repository owner rather than opening an issue containing sensitive traces.

@@ -11,6 +11,7 @@ from .evaluator import (
 )
 from .integrity import chain_root, compute_chain, record_digest, seal_digest, seal_matches
 from .models import GenerationRecord, RunTrace, Seal, TraceFormatError, load_trace
+from .scorecard import Scorecard, Step, build_scorecard
 
 __all__ = [
     "Anchors",
@@ -21,8 +22,11 @@ __all__ = [
     "GenerationRecord",
     "RunReport",
     "RunTrace",
+    "Scorecard",
+    "Step",
     "Seal",
     "TraceFormatError",
+    "build_scorecard",
     "chain_root",
     "compute_chain",
     "evaluate_trace",

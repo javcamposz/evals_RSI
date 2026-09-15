@@ -79,6 +79,19 @@ def format_report(report) -> str:
         f"Efficiency: {report.holdout_delta_per_1k_tokens:+.4f} / 1k tokens",
         f"Next challenge level: {report.next_challenge_level}",
     ]
+    card = report.scorecard
+    if card is not None and card.steps:
+        difficulty = (
+            f"unchanged at {card.first_challenge}"
+            if card.at_constant_difficulty
+            else f"{card.first_challenge} to {card.last_challenge}"
+        )
+        lines.append(f"Challenge level: {difficulty}")
+        lines.append(
+            f"Plateau: {'none, still gaining' if card.plateau_from is None else f'from generation {card.plateau_from}'}"
+        )
+        lines.append(f"Verifier gap: {card.verifier_gap:.3f} at the level the run ended on")
+        lines.append(f"Goodhart incidence: {card.goodhart_incidence:.2f} of steps")
     if report.invariant_survival:
         lines.append("Declared invariants:")
         for item in report.invariant_survival:

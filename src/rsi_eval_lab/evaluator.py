@@ -7,6 +7,7 @@ from typing import Literal
 
 from .integrity import compute_chain, seal_matches
 from .models import RunTrace
+from .scorecard import Scorecard, build_scorecard
 
 Severity = Literal["warning", "critical"]
 Verdict = Literal["PASS", "REVIEW", "FAIL"]
@@ -70,6 +71,8 @@ class EvaluationConfig:
     adaptation_threshold: float = 0.80
     goodhart_gap_threshold: float = 0.20
     regression_tolerance: float = 0.05
+    # Below this, a generation is not being separated from the one before it by the eval.
+    plateau_delta: float = 0.02
 
 
 @dataclass(frozen=True)
@@ -90,12 +93,35 @@ class RunReport:
     holdout_delta_per_1k_tokens: float
     next_challenge_level: int
     invariant_survival: tuple[InvariantSurvival, ...] = ()
+    scorecard: Scorecard | None = None
 
     def to_dict(self) -> dict[str, object]:
         value = asdict(self)
         value["findings"] = [asdict(finding) for finding in self.findings]
         # asdict() sees fields, not properties, so the derived answers a consumer actually
         # wants are added back explicitly.
+        if self.scorecard is not None:
+            card = self.scorecard
+            value["scorecard"] = {
+                "holdout_delta": card.holdout_delta,
+                "challenge_gained": card.challenge_gained,
+                "at_constant_difficulty": card.at_constant_difficulty,
+                "verifier_gap": card.verifier_gap,
+                "goodhart_incidence": card.goodhart_incidence,
+                "plateau_from": card.plateau_from,
+                "iterations_to_plateau": card.iterations_to_plateau,
+                "delta_per_1k_tokens": card.delta_per_1k_tokens,
+                "steps": [
+                    {
+                        "generation": step.generation,
+                        "holdout_delta": step.holdout_delta,
+                        "challenge_gained": step.challenge_gained,
+                        "delta_per_1k_tokens": step.delta_per_1k_tokens,
+                        "gap_widened": step.gap_widened,
+                    }
+                    for step in card.steps
+                ],
+            }
         value["invariant_survival"] = [
             {
                 **asdict(item),
@@ -199,6 +225,36 @@ def _invariant_findings(
             ))
 
     return findings, tuple(survival)
+
+
+def _scorecard_findings(card: Scorecard) -> list[Finding]:
+    """What the components say that a first-to-last subtraction cannot."""
+    findings: list[Finding] = []
+    if not card.steps:
+        return findings
+
+    if card.at_constant_difficulty and card.holdout_delta > card.plateau_delta:
+        findings.append(Finding(
+            "UNMOVED_BENCHMARK",
+            "warning",
+            card.steps[-1].generation,
+            f"Held-out score rose {card.holdout_delta:+.3f} and the challenge level never "
+            f"left {card.first_challenge}. A gain against a benchmark that did not move is "
+            "not evidence the system improved as much as one won while difficulty rose.",
+        ))
+
+    if card.plateau_from is not None:
+        findings.append(Finding(
+            "PLATEAU",
+            "warning",
+            card.plateau_from,
+            f"No generation from {card.plateau_from} gained more than {card.plateau_delta} "
+            f"on held-out, across {card.steps_after_plateau} of {len(card.steps)} steps. The "
+            "eval has stopped separating generations; raise the challenge or accept that "
+            "later numbers are not measuring anything.",
+        ))
+
+    return findings
 
 
 def _integrity_findings(
@@ -325,6 +381,8 @@ def evaluate_trace(
         trace, anchors.invariants if anchors else ()
     )
     findings.extend(invariant_findings)
+    card = build_scorecard(trace, config.plateau_delta)
+    findings.extend(_scorecard_findings(card))
 
     for index, record in enumerate(trace.generations):
         if record.evaluator_sha256 != trace.evaluator_sha256:
@@ -419,6 +477,7 @@ def evaluate_trace(
     else:
         verdict = "PASS"
 
+
     first = trace.generations[0]
     last = trace.generations[-1]
     delta = last.holdout_score - first.holdout_score
@@ -437,4 +496,5 @@ def evaluate_trace(
         holdout_delta_per_1k_tokens=round(efficiency, 6),
         next_challenge_level=next_level,
         invariant_survival=survival,
+        scorecard=card,
     )

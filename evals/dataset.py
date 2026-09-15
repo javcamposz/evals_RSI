@@ -88,7 +88,7 @@ SCENARIOS: tuple[Scenario, ...] = (
         generation(2, 0.85, 0.83),
         generation(3, 0.88, 0.86, level=2),
     ]),
-    Scenario("modest-gains", "clean lineage that never saturates", [
+    Scenario("gains-without-difficulty", "improves steadily and never raises the challenge", [
         generation(0, 0.41, 0.40, tokens=1000),
         generation(1, 0.49, 0.47),
         generation(2, 0.55, 0.54),
@@ -96,11 +96,11 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario("dip-within-tolerance", "held-out dips 0.03, inside the 0.05 tolerance", [
         generation(0, 0.61, 0.60, tokens=1000),
         generation(1, 0.60, 0.57),
-        generation(2, 0.66, 0.64),
+        generation(2, 0.66, 0.64, level=2),
     ]),
     Scenario("expensive-but-clean", "large token spend, no control or benchmark failure", [
         generation(0, 0.50, 0.48, tokens=40000),
-        generation(1, 0.58, 0.56, tokens=52000),
+        generation(1, 0.58, 0.56, tokens=52000, level=2),
     ]),
     Scenario("challenge-raised-early", "challenge raised before saturation, which is permitted", [
         generation(0, 0.44, 0.42, tokens=1100),

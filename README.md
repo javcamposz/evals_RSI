@@ -224,9 +224,14 @@ Kept discriminating longer: adaptive-benchmark-regime, 5 steps
 The guard this exists for comes first in the report. The static run ended at **0.855** and the
 adaptive one at **0.780**, and the comparison refuses to rank them:
 
-> **Held-out scores are not comparable.** static-benchmark-regime ran at [1, 1, 1, 1, 1, 1] and
-> adaptive-benchmark-regime at [1, 1, 2, 2, 3, 3]. Different difficulty is a different measurement,
-> so the higher final score is not the better result, and this report does not rank them on it.
+> **Held-out scores are not comparable.** The higher final score is not the better result, and this
+> report does not rank them on it.
+>   - static-benchmark-regime ran at [1, 1, 1, 1, 1, 1] and adaptive-benchmark-regime at
+>     [1, 1, 2, 2, 3, 3]; different difficulty is a different measurement.
+
+Different **evaluators** are a different measurement too, and are checked the same way. Reading
+difficulty alone would have let two runs scored by different evaluators be declared to measure the
+same thing.
 
 What can be compared is how long each regime kept telling one generation from the next:
 
@@ -238,6 +243,10 @@ What can be compared is how long each regime kept telling one generation from th
 
 The static regime stopped producing evidence about the solver at generation 4 and carried on
 reporting numbers. Discrimination is a property of the evaluation, not of the candidate.
+
+A regime whose run ended while the eval was still separating generations has a **floor, not a
+total**, so it is not ranked against one that stopped unless it is already ahead. Otherwise an eval
+that gave up would beat one that never did, purely by being run for more generations.
 
 A run that failed its own audit is not evidence about the regime that produced it, so the comparison
 says so and exits non-zero rather than ranking on it.

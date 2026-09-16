@@ -55,6 +55,7 @@ class Scorecard:
     holdout_delta: float
     total_tokens: int
     challenge_levels: tuple[int, ...]
+    evaluator: str
     final_holdout: float
     plateau_delta: float
 
@@ -159,6 +160,7 @@ def build_scorecard(trace: RunTrace, plateau_delta: float) -> Scorecard:
         holdout_delta=round(generations[-1].holdout_score - generations[0].holdout_score, 4),
         total_tokens=sum(record.token_cost for record in generations),
         challenge_levels=tuple(record.challenge_level for record in generations),
+        evaluator=trace.evaluator_sha256,
         final_holdout=generations[-1].holdout_score,
         plateau_delta=plateau_delta,
     )

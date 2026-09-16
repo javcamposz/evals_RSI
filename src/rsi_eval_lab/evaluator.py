@@ -107,6 +107,7 @@ class RunReport:
                 "challenge_gained": card.challenge_gained,
                 "at_constant_difficulty": card.at_constant_difficulty,
                 "challenge_levels": list(card.challenge_levels),
+                "evaluator": card.evaluator,
                 "peak_challenge": card.peak_challenge,
                 "challenge_reductions": [step.generation for step in card.challenge_reductions],
                 "verifier_gap": card.verifier_gap,

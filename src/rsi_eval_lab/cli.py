@@ -81,11 +81,15 @@ def format_report(report) -> str:
     ]
     card = report.scorecard
     if card is not None and card.steps:
-        difficulty = (
-            f"unchanged at {card.first_challenge}"
-            if card.at_constant_difficulty
-            else f"{card.first_challenge} to {card.last_challenge}"
-        )
+        if card.at_constant_difficulty:
+            difficulty = f"unchanged at {card.first_challenge}"
+        elif card.challenge_reductions:
+            difficulty = (
+                f"{' to '.join(str(level) for level in card.challenge_levels)}, reduced at "
+                f"{', '.join(str(step.generation) for step in card.challenge_reductions)}"
+            )
+        else:
+            difficulty = f"{card.first_challenge} to {card.last_challenge}"
         lines.append(f"Challenge level: {difficulty}")
         lines.append(
             f"Plateau: {'none, still gaining' if card.plateau_from is None else f'from generation {card.plateau_from}'}"

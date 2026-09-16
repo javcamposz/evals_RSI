@@ -176,3 +176,73 @@ def test_no_composite_score_is_invented():
 
     assert "score" not in card_json
     assert set(card_json) >= {"holdout_delta", "challenge_gained", "verifier_gap"}
+
+
+# --- difficulty that moved and came back ---
+
+def test_constant_difficulty_means_never_moved_not_ended_where_it_started():
+    """Judging this first-to-last repeated the blindness this module exists to fix."""
+    result = card(run([0.55, 0.65, 0.75, 0.85], [1, 2, 3, 1]))
+
+    assert result.challenge_gained == 0
+    assert not result.at_constant_difficulty
+    assert result.peak_challenge == 3
+    assert result.challenge_levels == (1, 2, 3, 1)
+
+
+def test_a_run_that_never_moved_is_still_constant():
+    result = card(run([0.55, 0.85], [2, 2]))
+
+    assert result.at_constant_difficulty
+    assert result.challenge_reductions == ()
+    assert result.peak_challenge == 2
+
+
+def test_a_reduced_challenge_is_not_reported_as_an_unmoved_benchmark():
+    report = evaluate_trace(run([0.55, 0.65, 0.75, 0.85], [1, 2, 3, 1]), anchors=ANCHORS)
+
+    assert "UNMOVED_BENCHMARK" not in codes(report)
+    assert "never left" not in " ".join(f.message for f in report.findings)
+
+
+# --- the benchmark being weakened ---
+
+def test_lowering_the_challenge_level_fails_the_run():
+    report = evaluate_trace(run([0.55, 0.65, 0.75, 0.85], [1, 2, 3, 1]), anchors=ANCHORS)
+
+    assert report.verdict == "FAIL"
+    assert codes(report) == ["CHALLENGE_REDUCED"]
+    message = report.findings[0].message
+    assert "fell from 3 to 1 at generation 3" in message
+    assert "scores either side of the reduction are not comparable" in message
+
+
+def test_every_reduction_is_recorded_not_only_the_first():
+    report = evaluate_trace(run([0.5, 0.6, 0.7, 0.8, 0.9], [1, 3, 2, 4, 3]), anchors=ANCHORS)
+    result = card(run([0.5, 0.6, 0.7, 0.8, 0.9], [1, 3, 2, 4, 3]))
+
+    assert [step.generation for step in result.challenge_reductions] == [2, 4]
+    assert "and again at generation(s) 4" in report.findings[0].message
+
+
+def test_a_rising_challenge_is_never_a_reduction():
+    assert card(run([0.5, 0.6, 0.7], [1, 2, 3])).challenge_reductions == ()
+
+
+def test_the_report_names_the_whole_trajectory_when_it_was_reduced():
+    from rsi_eval_lab.cli import format_report
+
+    report = format_report(evaluate_trace(run([0.55, 0.85], [3, 1]), anchors=ANCHORS))
+
+    assert "Challenge level: 3 to 1, reduced at 1" in report
+
+
+def test_reductions_reach_the_machine_readable_report():
+    card_json = evaluate_trace(
+        run([0.55, 0.65, 0.75, 0.85], [1, 2, 3, 1]), anchors=ANCHORS
+    ).to_dict()["scorecard"]
+
+    assert card_json["challenge_levels"] == [1, 2, 3, 1]
+    assert card_json["peak_challenge"] == 3
+    assert card_json["challenge_reductions"] == [3]
+    assert card_json["at_constant_difficulty"] is False

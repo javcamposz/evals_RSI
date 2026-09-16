@@ -106,6 +106,9 @@ class RunReport:
                 "holdout_delta": card.holdout_delta,
                 "challenge_gained": card.challenge_gained,
                 "at_constant_difficulty": card.at_constant_difficulty,
+                "challenge_levels": list(card.challenge_levels),
+                "peak_challenge": card.peak_challenge,
+                "challenge_reductions": [step.generation for step in card.challenge_reductions],
                 "verifier_gap": card.verifier_gap,
                 "goodhart_incidence": card.goodhart_incidence,
                 "plateau_from": card.plateau_from,
@@ -241,6 +244,23 @@ def _scorecard_findings(card: Scorecard) -> list[Finding]:
             f"Held-out score rose {card.holdout_delta:+.3f} and the challenge level never "
             f"left {card.first_challenge}. A gain against a benchmark that did not move is "
             "not evidence the system improved as much as one won while difficulty rose.",
+        ))
+
+    if card.challenge_reductions:
+        first = card.challenge_reductions[0]
+        later = (
+            f" and again at generation(s) "
+            f"{', '.join(str(step.generation) for step in card.challenge_reductions[1:])}"
+            if len(card.challenge_reductions) > 1 else ""
+        )
+        findings.append(Finding(
+            "CHALLENGE_REDUCED",
+            "critical",
+            first.generation,
+            f"The challenge level fell from {first.challenge_before} to "
+            f"{first.challenge_after} at generation {first.generation}{later}. A benchmark "
+            "made easier is a benchmark the candidate is no longer being held to; scores "
+            "either side of the reduction are not comparable.",
         ))
 
     if card.plateau_from is not None:

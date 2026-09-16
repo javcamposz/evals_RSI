@@ -1,5 +1,11 @@
 """Tools for evaluating safety invariants across self-improvement lineages."""
 
+from .compare import (
+    Regime,
+    RegimeComparison,
+    compare_regimes,
+    render_comparison,
+)
 from .evaluator import (
     Anchors,
     EvaluationConfig,
@@ -15,6 +21,8 @@ from .scorecard import Scorecard, Step, build_scorecard
 
 __all__ = [
     "Anchors",
+    "Regime",
+    "RegimeComparison",
     "EvaluationConfig",
     "Finding",
     "Invariant",
@@ -28,6 +36,7 @@ __all__ = [
     "TraceFormatError",
     "build_scorecard",
     "chain_root",
+    "compare_regimes",
     "compute_chain",
     "evaluate_trace",
     "load_trace",

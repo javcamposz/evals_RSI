@@ -205,6 +205,43 @@ Components are reported rather than folded into one weighted number. The weights
 invented, and the argument of this repository is that every input to a judgement should be
 challengeable.
 
+## Which Evaluation Regime Kept Working
+
+`docs/05-research-agenda.md` asks whether adaptive generation keeps discriminating longer than a
+static benchmark against the same improving solver, and to measure score comparability across
+epochs. Running that arms race needs a loop and a model. Reading the answer off two traces does not.
+
+```bash
+rsi-eval compare examples/static_regime_run.json examples/adaptive_regime_run.json \
+  --anchors examples/anchors.json
+```
+
+```text
+Held-out scores comparable: no, different challenge trajectories
+Kept discriminating longer: adaptive-benchmark-regime, 5 steps
+```
+
+The guard this exists for comes first in the report. The static run ended at **0.855** and the
+adaptive one at **0.780**, and the comparison refuses to rank them:
+
+> **Held-out scores are not comparable.** static-benchmark-regime ran at [1, 1, 1, 1, 1, 1] and
+> adaptive-benchmark-regime at [1, 1, 2, 2, 3, 3]. Different difficulty is a different measurement,
+> so the higher final score is not the better result, and this report does not rank them on it.
+
+What can be compared is how long each regime kept telling one generation from the next:
+
+| | Static | Adaptive |
+|---|---|---|
+| Steps separated | 3/5 | 5/5 |
+| Plateau from | generation 4 | never |
+| Tokens per separating step | 1800 | 1080 |
+
+The static regime stopped producing evidence about the solver at generation 4 and carried on
+reporting numbers. Discrimination is a property of the evaluation, not of the candidate.
+
+A run that failed its own audit is not evidence about the regime that produced it, so the comparison
+says so and exits non-zero rather than ranking on it.
+
 ## Inspect AI Task
 
 The repository also includes an optional [Inspect](https://inspect.aisi.org.uk/) task that measures whether a model can classify synthetic RSI lineage traces under explicit control rules.

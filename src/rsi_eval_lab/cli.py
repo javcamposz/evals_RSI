@@ -8,11 +8,12 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from .compare import compare_regimes, render_comparison
 from .evaluator import Anchors, Invariant, evaluate_trace
 from .integrity import SEAL_ALGORITHM, compute_chain, seal_digest
 from .models import Seal, TraceFormatError, load_trace
 
-COMMANDS = ("audit", "seal")
+COMMANDS = ("audit", "compare", "seal")
 
 
 def _read_key(path: str | None) -> bytes | None:
@@ -170,6 +171,46 @@ def _seal(args: argparse.Namespace) -> int:
     return 0
 
 
+def _compare(args: argparse.Namespace) -> int:
+    anchors = _read_anchors(args.anchors)
+    key = _read_key(args.key_file)
+    baseline = evaluate_trace(load_trace(args.baseline), anchors=anchors, seal_key=key)
+    candidate = evaluate_trace(load_trace(args.candidate), anchors=anchors, seal_key=key)
+    comparison = compare_regimes(baseline, candidate)
+
+    if args.json:
+        print(json.dumps({
+            "baseline": baseline.to_dict(),
+            "candidate": candidate.to_dict(),
+            "scores_comparable": comparison.scores_comparable,
+            "lasted_longer": comparison.lasted_longer.run_id if comparison.lasted_longer else None,
+            "both_sound": comparison.both_sound,
+        }, indent=2))
+    else:
+        _emit_comparison(comparison, args.output)
+
+    print(f"Baseline: {baseline.run_id} ({baseline.verdict})")
+    print(f"Candidate: {candidate.run_id} ({candidate.verdict})")
+    print("Held-out scores comparable: "
+          + ("yes" if comparison.scores_comparable else "no, different challenge trajectories"))
+    winner = comparison.lasted_longer
+    print("Kept discriminating longer: "
+          + (f"{winner.run_id}, {winner.lasted} steps" if winner else "neither"))
+    if not comparison.both_sound:
+        print("Comparison rests on a run that failed its own audit: "
+              + ", ".join(regime.run_id for regime in comparison.unsound))
+        return 1
+    return 0
+
+
+def _emit_comparison(comparison, output: Path | None) -> None:
+    report = render_comparison(comparison)
+    if output:
+        Path(output).write_text(report)
+    else:
+        print(report)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Audit a self-improvement lineage for safety invariant failures."
@@ -185,6 +226,18 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--key-file", help="Path to the key the trace was sealed with")
     audit.add_argument("--json", action="store_true", help="Emit a machine-readable report")
     audit.set_defaults(handler=_audit)
+
+    compare = subparsers.add_parser(
+        "compare",
+        help="compare two evaluation regimes over the same improving solver",
+    )
+    compare.add_argument("baseline", help="the regime to compare against")
+    compare.add_argument("candidate", help="the regime under test")
+    compare.add_argument("--anchors", help="anchors held outside both traces")
+    compare.add_argument("--key-file", help="key both traces were sealed with")
+    compare.add_argument("--json", action="store_true", help="emit a machine-readable comparison")
+    compare.add_argument("--output", help="write the report here instead of stdout")
+    compare.set_defaults(handler=_compare)
 
     seal = subparsers.add_parser("seal", help="write a chained, optionally sealed trace")
     seal.add_argument("trace", help="Path to a JSON lineage trace")

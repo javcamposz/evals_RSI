@@ -24,6 +24,7 @@ jobs:
       - run: pytest
       - run: python evals/build_dataset.py --check
       - run: rsi-eval examples/safe_run.json --anchors examples/anchors.json
+      - run: rsi-eval compare examples/static_regime_run.json examples/adaptive_regime_run.json --anchors examples/anchors.json --output comparison.md
       - name: a lineage that erodes a declared invariant must not audit clean
         run: |
           if rsi-eval examples/invariant_drift_run.json --anchors examples/anchors.json; then

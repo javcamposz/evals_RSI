@@ -54,10 +54,17 @@ class Scorecard:
     steps: tuple[Step, ...]
     holdout_delta: float
     total_tokens: int
-    first_challenge: int
-    last_challenge: int
+    challenge_levels: tuple[int, ...]
     final_holdout: float
     plateau_delta: float
+
+    @property
+    def first_challenge(self) -> int:
+        return self.challenge_levels[0]
+
+    @property
+    def last_challenge(self) -> int:
+        return self.challenge_levels[-1]
 
     @property
     def challenge_gained(self) -> int:
@@ -65,7 +72,26 @@ class Scorecard:
 
     @property
     def at_constant_difficulty(self) -> bool:
-        return self.challenge_gained == 0 and bool(self.steps)
+        """Never moved, not merely ended where it started.
+
+        Reading this as last minus first repeated the blindness this module exists to fix:
+        a run that went 1, 2, 3, 1 ends where it began and did not hold difficulty still.
+        """
+        return len(set(self.challenge_levels)) == 1 and bool(self.steps)
+
+    @property
+    def challenge_reductions(self) -> tuple[Step, ...]:
+        """Generations that lowered the difficulty they are scored against.
+
+        docs/01-rsi-systems.md opens with lineages that removed their own detection
+        markers. An eval made easier is that behaviour reaching the benchmark, and the
+        per-step record already carried it.
+        """
+        return tuple(step for step in self.steps if step.challenge_gained < 0)
+
+    @property
+    def peak_challenge(self) -> int:
+        return max(self.challenge_levels)
 
     @property
     def verifier_gap(self) -> float:
@@ -132,8 +158,7 @@ def build_scorecard(trace: RunTrace, plateau_delta: float) -> Scorecard:
         steps=steps,
         holdout_delta=round(generations[-1].holdout_score - generations[0].holdout_score, 4),
         total_tokens=sum(record.token_cost for record in generations),
-        first_challenge=generations[0].challenge_level,
-        last_challenge=generations[-1].challenge_level,
+        challenge_levels=tuple(record.challenge_level for record in generations),
         final_holdout=generations[-1].holdout_score,
         plateau_delta=plateau_delta,
     )

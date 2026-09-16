@@ -55,12 +55,26 @@ class Regime:
 
     @property
     def lasted(self) -> int:
-        """Steps before the eval stopped separating generations for good."""
+        """Steps before the eval stopped separating generations for good.
+
+        A floor rather than a measurement when the run ended still separating: the eval had
+        not failed, it simply was not asked to go further.
+        """
         if self.card.plateau_from is None:
             return len(self.card.steps)
         return sum(
             1 for step in self.card.steps if step.generation < self.card.plateau_from
         )
+
+    @property
+    def still_separating(self) -> bool:
+        """The run ended before its eval stopped telling generations apart."""
+        return bool(self.card.steps) and self.card.plateau_from is None
+
+    @property
+    def evaluator(self) -> str:
+        """The evaluator the run declares its scores were produced by."""
+        return self.report.scorecard.evaluator if self.report.scorecard else ""
 
 
 @dataclass(frozen=True)
@@ -77,20 +91,69 @@ class RegimeComparison:
         return tuple(r for r in (self.baseline, self.candidate) if not r.is_sound)
 
     @property
-    def scores_comparable(self) -> bool:
-        """Only when both runs were scored against the same difficulty, in the same order.
-
-        Absolute scores from different challenge trajectories are measurements of
-        different things. Ranking them is the mistake a dynamic eval exists to prevent.
-        """
+    def same_difficulty(self) -> bool:
         return self.baseline.card.challenge_levels == self.candidate.card.challenge_levels
 
     @property
+    def same_evaluator(self) -> bool:
+        return self.baseline.evaluator == self.candidate.evaluator
+
+    @property
+    def scores_comparable(self) -> bool:
+        """Same difficulty, in the same order, and the same evaluator producing the scores.
+
+        Absolute scores from different challenge trajectories are measurements of different
+        things, and so are scores from different evaluators. Reading difficulty alone let two
+        runs scored by different evaluators be declared to measure the same thing, which is
+        the mistake this module exists to refuse.
+        """
+        return self.same_difficulty and self.same_evaluator
+
+    @property
+    def incomparable_because(self) -> tuple[str, ...]:
+        reasons = []
+        if not self.same_difficulty:
+            reasons.append(
+                f"{self.baseline.run_id} ran at "
+                f"{list(self.baseline.card.challenge_levels)} and {self.candidate.run_id} at "
+                f"{list(self.candidate.card.challenge_levels)}; different difficulty is a "
+                "different measurement"
+            )
+        if not self.same_evaluator:
+            reasons.append(
+                f"{self.baseline.run_id} was scored by {self.baseline.evaluator!r} and "
+                f"{self.candidate.run_id} by {self.candidate.evaluator!r}; different "
+                "evaluators are different measurements"
+            )
+        return tuple(reasons)
+
+    @property
     def lasted_longer(self) -> Regime | None:
-        """The regime that kept separating generations for more steps, if either did."""
+        """The regime that kept separating generations for more steps, if that is knowable.
+
+        A regime that ended still separating has a floor, not a total. Ranking a regime
+        whose eval stopped above one whose eval never did, because the first was run for
+        more generations, answers a question about run length rather than about the eval.
+        """
+        if self.unranked_because_still_running:
+            return None
         if self.baseline.lasted == self.candidate.lasted:
             return None
         return max((self.baseline, self.candidate), key=lambda regime: regime.lasted)
+
+    @property
+    def unranked_because_still_running(self) -> tuple[Regime, ...]:
+        """Regimes whose eval had not stopped when the run ended, blocking a ranking.
+
+        Only blocking when the other regime is not clearly behind it already: a regime
+        still separating after more steps than the other managed in total has won.
+        """
+        for regime, other in ((self.baseline, self.candidate), (self.candidate, self.baseline)):
+            if regime.still_separating and regime.lasted <= other.lasted:
+                return tuple(
+                    item for item in (self.baseline, self.candidate) if item.still_separating
+                )
+        return ()
 
     @property
     def held_difficulty_still(self) -> tuple[Regime, ...]:
@@ -146,17 +209,17 @@ def render_comparison(comparison: RegimeComparison) -> str:
 
     if comparison.scores_comparable:
         lines.append(
-            "- Both were scored against the same challenge trajectory "
+            "- Both were scored by the same evaluator against the same challenge trajectory "
             f"{list(baseline.card.challenge_levels)}, so their held-out scores measure the "
             "same thing and can be read against each other."
         )
     else:
+        lines.append(
+            "- **Held-out scores are not comparable.** The higher final score is not the "
+            "better result, and this report does not rank them on it."
+        )
+        lines.extend(f"  - {reason}." for reason in comparison.incomparable_because)
         lines.extend([
-            f"- **Held-out scores are not comparable.** {baseline.run_id} ran at "
-            f"{list(baseline.card.challenge_levels)} and {candidate.run_id} at "
-            f"{list(candidate.card.challenge_levels)}. Different difficulty is a different "
-            "measurement, so the higher final score is not the better result, and this "
-            "report does not rank them on it.",
             "",
             f"  For the record and not as a ranking: {baseline.run_id} ended at "
             f"{baseline.card.final_holdout:.3f}, {candidate.run_id} at "
@@ -165,7 +228,16 @@ def render_comparison(comparison: RegimeComparison) -> str:
 
     lines.extend(["", "## Which Regime Kept Discriminating Longer", ""])
     winner = comparison.lasted_longer
-    if winner is None:
+    still_running = comparison.unranked_because_still_running
+    if still_running:
+        names = " and ".join(regime.run_id for regime in still_running)
+        subject = "its figure is a floor" if len(still_running) == 1 else "those figures are floors"
+        lines.append(
+            f"- Not knowable from these runs. {names} ended while the eval was still "
+            f"separating generations, so {subject} rather than a total. Ranking on that "
+            "would answer a question about run length rather than about the eval."
+        )
+    elif winner is None:
         lines.append(
             f"- Neither. Both separated generations for {baseline.lasted} steps before "
             "stopping, so on this evidence the regimes are indistinguishable."
@@ -177,8 +249,8 @@ def render_comparison(comparison: RegimeComparison) -> str:
         )
     for regime in (baseline, candidate):
         plateau = (
-            "never stopped separating generations"
-            if regime.card.plateau_from is None
+            "still separating when the run ended"
+            if regime.still_separating
             else f"stopped separating generations from generation {regime.card.plateau_from}"
         )
         lines.append(
@@ -214,6 +286,7 @@ def render_comparison(comparison: RegimeComparison) -> str:
         ("Steps separated", f"{baseline.separating_steps}/{len(baseline.card.steps)}",
          f"{candidate.separating_steps}/{len(candidate.card.steps)}"),
         ("Discrimination", f"{baseline.discrimination:.2f}", f"{candidate.discrimination:.2f}"),
+        ("Evaluator", baseline.evaluator, candidate.evaluator),
         ("Plateau from", str(baseline.card.plateau_from), str(candidate.card.plateau_from)),
         ("Goodhart incidence", f"{baseline.card.goodhart_incidence:.2f}",
          f"{candidate.card.goodhart_incidence:.2f}"),

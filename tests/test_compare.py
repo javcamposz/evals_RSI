@@ -71,7 +71,8 @@ def test_scores_from_different_difficulty_are_not_comparable():
     assert not comparison.scores_comparable
     report = render_comparison(comparison)
     assert "**Held-out scores are not comparable.**" in report
-    assert "the higher final score is not the better result" in report
+    assert "The higher final score is not the better result" in report
+    assert "different difficulty is a different measurement" in report
 
 
 def test_the_higher_final_score_is_reported_but_not_ranked():
@@ -115,12 +116,26 @@ def test_the_regime_that_kept_separating_generations_is_named():
     assert comparison.baseline.discrimination == 0.6
 
 
-def test_two_regimes_that_lasted_the_same_are_not_ranked():
+def test_two_regimes_both_still_separating_are_not_ranked():
+    """Both figures are floors; ranking them would compare run length, not the evals."""
     comparison = compare_regimes(
         run("a", [0.5, 0.6, 0.7], [1, 2, 3]),
         run("b", [0.5, 0.62, 0.74], [1, 2, 3]),
     )
 
+    assert comparison.lasted_longer is None
+    report = render_comparison(comparison)
+    assert "Not knowable from these runs" in report
+    assert "those figures are floors" in report
+
+
+def test_two_regimes_that_both_stopped_at_the_same_point_are_indistinguishable():
+    comparison = compare_regimes(
+        run("a", [0.5, 0.7, 0.705, 0.706], [1, 1, 1, 1]),
+        run("b", [0.5, 0.7, 0.702, 0.703], [1, 1, 1, 1]),
+    )
+
+    assert comparison.unranked_because_still_running == ()
     assert comparison.lasted_longer is None
     assert "on this evidence the regimes are indistinguishable" in render_comparison(comparison)
 
@@ -208,3 +223,76 @@ def test_compare_emits_a_machine_readable_form(capsys):
     assert payload["lasted_longer"] == "adaptive-benchmark-regime"
     assert payload["both_sound"] is True
     assert payload["baseline"]["scorecard"]["at_constant_difficulty"] is True
+
+
+# --- what the review found ---
+
+def test_different_evaluators_are_not_comparable_however_the_difficulty_matches():
+    """Different evaluators are different measurements, like different difficulty is."""
+    baseline = run("scored-by-v1", [0.50, 0.62, 0.74], [1, 2, 3],
+                   evaluator_sha256="eval-anchor-v1")
+    candidate = run("scored-by-v2", [0.50, 0.62, 0.74], [1, 2, 3],
+                    evaluator_sha256="eval-anchor-v1")
+    comparison = compare_regimes(baseline, candidate)
+    assert comparison.scores_comparable, "same evaluator, same difficulty"
+
+    other = compare_regimes(baseline, run_with_evaluator("scored-by-v2", "eval-v2"))
+
+    assert other.same_difficulty and not other.same_evaluator
+    assert not other.scores_comparable
+    reasons = " ".join(other.incomparable_because)
+    assert "different evaluators are different measurements" in reasons
+    assert "'eval-anchor-v1'" in reasons and "'eval-v2'" in reasons
+
+
+def run_with_evaluator(run_id, evaluator):
+    value = {
+        "run_id": run_id,
+        "anchors": {"evaluator_sha256": evaluator, "monitor_sha256": "monitor-anchor-v1"},
+        "generations": [
+            dict(generation(index, holdout, level), evaluator_sha256=evaluator)
+            for index, (holdout, level) in enumerate(zip([0.50, 0.62, 0.74], [1, 2, 3]))
+        ],
+    }
+    digests = compute_chain(RunTrace.from_dict(value))
+    for record, digest in zip(value["generations"], digests):
+        record["record_sha256"] = digest
+    value["chain_head"] = digests[-1]
+    return evaluate_trace(RunTrace.from_dict(value))
+
+
+def test_both_reasons_are_given_when_both_differ():
+    comparison = compare_regimes(
+        run("a", [0.5, 0.6, 0.7], [1, 1, 1]),
+        run_with_evaluator("b", "eval-v2"),
+    )
+
+    assert len(comparison.incomparable_because) == 2
+
+
+def test_a_regime_still_separating_blocks_a_ranking_it_would_lose_on_length():
+    """The eight-generation run's eval stopped; the three-generation run's never did."""
+    stopped = run("long-then-stopped",
+                  [0.40, 0.50, 0.60, 0.70, 0.80, 0.805, 0.81, 0.812], [1] * 8)
+    going = run("short-still-going", [0.40, 0.55, 0.70], [1, 2, 3])
+    comparison = compare_regimes(stopped, going)
+
+    assert comparison.baseline.lasted == 4 and comparison.candidate.lasted == 2
+    assert comparison.candidate.still_separating
+    assert comparison.lasted_longer is None
+    assert "Not knowable from these runs" in render_comparison(comparison)
+
+
+def test_a_regime_still_separating_beyond_the_other_total_does_win():
+    """A floor above the other regime's total is already decisive."""
+    stopped = run("stopped-early", [0.40, 0.50, 0.505, 0.506, 0.507], [1] * 5)
+    going = run("still-going", [0.40, 0.50, 0.60, 0.70, 0.80], [1, 2, 3, 4, 5])
+    comparison = compare_regimes(stopped, going)
+
+    assert comparison.candidate.still_separating
+    assert comparison.candidate.lasted > comparison.baseline.lasted
+    assert comparison.lasted_longer is comparison.candidate
+
+
+def test_the_evaluator_appears_in_the_side_by_side():
+    assert "| Evaluator | eval-anchor-v1 | eval-anchor-v1 |" in render_comparison(shipped())

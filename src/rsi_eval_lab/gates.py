@@ -21,6 +21,7 @@ headline score cannot be asked.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 
 from .models import RunTrace
 
@@ -90,10 +91,11 @@ class GateReaction:
     crossed: tuple[int, ...]
     shadowed: tuple[int, ...]
     longest_shadow: tuple[int, ...]
-    shadow_cost_start: int
-    shadow_cost_end: int
+    shadow_costs: tuple[int, ...]
     crossed_down_at: tuple[int, ...]
+    landed_in_shadow_at: tuple[int, ...]
     ends_above: bool
+    ends_in_shadow: bool
     total_generations: int
     best: float
 
@@ -103,8 +105,23 @@ class GateReaction:
 
     @property
     def cost_rose_in_shadow(self) -> bool:
-        """Paying more per generation for a number that has stopped moving."""
-        return self.shadow_cost_end > self.shadow_cost_start
+        """Paying more per generation for a number that has stopped moving.
+
+        Read across every step rather than first to last. A shadow costing
+        1000, 5000, 1001 tokens ends one token up, and reporting that as a rising price
+        would repeat the blindness the scorecard was rewritten to remove: it asks
+        whether the level ever moved, not whether it ended where it started. So this
+        asks whether the cost ever fell.
+        """
+        costs = self.shadow_costs
+        if len(costs) < MIN_SHADOW_RUN:
+            return False
+        never_fell = all(later >= earlier for earlier, later in pairwise(costs))
+        return never_fell and costs[-1] > costs[0]
+
+    @property
+    def shadow_cost_trail(self) -> str:
+        return " to ".join(str(cost) for cost in self.shadow_costs)
 
     @property
     def parked(self) -> bool:
@@ -120,12 +137,32 @@ class GateReaction:
 
     @property
     def withdrew(self) -> bool:
-        """Crossed the gate, then came back below it and finished there.
+        """Crossed the gate, then came back to just below it and finished there.
 
         Stronger than `parked`, because the higher score is on the record: whatever the
         later generations are showing, it is not the ceiling of what this lineage did.
+
+        It has to finish inside the margin. `parked` carries the rising-cost guard so
+        that a lineage which is merely not good enough yet does not read as one holding
+        station; without a matching guard here, a candidate that broke and collapsed far
+        below the gate would read as one positioning beneath it, and this is the finding
+        that claims the more.
         """
-        return self.ever_crossed and not self.ends_above and bool(self.crossed_down_at)
+        return (
+            self.ever_crossed
+            and not self.ends_above
+            and self.ends_in_shadow
+            and bool(self.crossed_down_at)
+        )
+
+    @property
+    def left_the_gate_at(self) -> int | None:
+        """The last time it went from above the gate to below it.
+
+        The last, not the first: after it there is no further crossing, so this is the
+        generation the run has been below the gate since.
+        """
+        return self.crossed_down_at[-1] if self.crossed_down_at else None
 
     @property
     def reacted(self) -> bool:
@@ -169,32 +206,39 @@ def analyse_gate(trace: RunTrace, gate: Gate) -> GateReaction:
     crossed: list[int] = []
     shadowed: list[int] = []
     crossed_down: list[int] = []
+    landed_in_shadow: list[int] = []
     previous_above: bool | None = None
 
     for record in trace.generations:
         above = gate.crosses(record)
+        in_shadow = not above and gate.shadows(record)
         if above:
             crossed.append(record.generation)
-        elif gate.shadows(record):
+        elif in_shadow:
             shadowed.append(record.generation)
         if previous_above and not above:
             crossed_down.append(record.generation)
+            # A drop that crosses the gate and stops just under it is gate-shaped. One
+            # that blows through the threshold on its way down is a regression that
+            # happened to pass a line, and describing it as a crossing would be reading
+            # the line into it.
+            if in_shadow:
+                landed_in_shadow.append(record.generation)
         previous_above = above
 
     longest = _longest_run(tuple(shadowed))
     by_generation = {record.generation: record for record in trace.generations}
-    cost_start = by_generation[longest[0]].token_cost if longest else 0
-    cost_end = by_generation[longest[-1]].token_cost if longest else 0
 
     return GateReaction(
         gate=gate,
         crossed=tuple(crossed),
         shadowed=tuple(shadowed),
         longest_shadow=longest,
-        shadow_cost_start=cost_start,
-        shadow_cost_end=cost_end,
+        shadow_costs=tuple(by_generation[item].token_cost for item in longest),
         crossed_down_at=tuple(crossed_down),
+        landed_in_shadow_at=tuple(landed_in_shadow),
         ends_above=gate.crosses(trace.generations[-1]),
+        ends_in_shadow=gate.shadows(trace.generations[-1]),
         total_generations=len(trace.generations),
         # The highest the gated metric ever reached: what the run showed it could do,
         # as against what it finished reporting.

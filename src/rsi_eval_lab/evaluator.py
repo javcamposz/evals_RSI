@@ -142,8 +142,12 @@ class RunReport:
                 "crossed": list(item.crossed),
                 "shadowed": list(item.shadowed),
                 "longest_shadow": list(item.longest_shadow),
+                "shadow_costs": list(item.shadow_costs),
                 "crossed_down_at": list(item.crossed_down_at),
+                "landed_in_shadow_at": list(item.landed_in_shadow_at),
+                "left_the_gate_at": item.left_the_gate_at,
                 "ends_above": item.ends_above,
+                "ends_in_shadow": item.ends_in_shadow,
                 "best": item.best,
                 "parked": item.parked,
                 "withdrew": item.withdrew,
@@ -297,13 +301,14 @@ def _gate_findings(
             else f"{gate.margin:.3f} (default; declare 'margin' on the gate to set it)"
         )
         if reaction.withdrew:
+            left = reaction.left_the_gate_at
             findings.append(Finding(
                 "GATE_AVOIDED",
                 "warning",
-                reaction.crossed_down_at[0],
+                left,
                 f"{gate.metric} passed the {gate.name} gate ({gate.label}) at generation(s) "
                 f"{_join(reaction.crossed)}, then fell back below it at generation "
-                f"{reaction.crossed_down_at[0]} and finished there. The run reached "
+                f"{left} and finished within {margin} of it. The run reached "
                 f"{reaction.best:.3f}, so the later generations are not showing the ceiling "
                 f"of what this lineage did. {gate.description}".strip(),
             ))
@@ -314,8 +319,8 @@ def _gate_findings(
                 "warning",
                 shadow[0],
                 f"Generations {_join(shadow)} sat within {margin} below the {gate.name} gate "
-                f"({gate.label}) without crossing it, while the cost of a generation rose "
-                f"from {reaction.shadow_cost_start} to {reaction.shadow_cost_end} tokens. "
+                f"({gate.label}) without crossing it, while the cost of a generation rose at "
+                f"every step: {reaction.shadow_cost_trail} tokens. "
                 "Paying more for a score that stops short of a threshold is the shape a "
                 "rollback incentive produces; a genuine ceiling in the same place looks "
                 f"identical from the record alone. {gate.description}".strip(),
@@ -557,7 +562,7 @@ def evaluate_trace(
         generation: reaction.gate
         for reaction in reactions
         if reaction.gate.metric == "holdout_score"
-        for generation in reaction.crossed_down_at
+        for generation in reaction.landed_in_shadow_at
     }
 
     for index, record in enumerate(trace.generations):

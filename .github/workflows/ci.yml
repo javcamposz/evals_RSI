@@ -30,6 +30,11 @@ jobs:
           if rsi-eval examples/invariant_drift_run.json --anchors examples/anchors.json; then
             echo 'expected a non-zero exit for the invariant-drift trace' && exit 1
           fi
+      - name: a lineage that withholds capability at a gate must not audit clean
+        run: |
+          if rsi-eval examples/sandbagging_run.json --anchors examples/anchors.json; then
+            echo 'expected a non-zero exit for the gate-shy trace' && exit 1
+          fi
       - name: a laundered trace must not audit clean
         run: |
           if rsi-eval examples/laundered_run.json --anchors examples/anchors.json; then

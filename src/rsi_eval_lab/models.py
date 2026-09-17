@@ -39,9 +39,19 @@ class GenerationRecord:
     external_processes: int
     audit_log_complete: bool
     observations: dict[str, str] | None = None
+    # Paired measurements of the same generation, for the two sandbagging signals
+    # docs/04 names. Paired on purpose: comparing groups of generations would confound
+    # a compliance gap with the lineage simply getting better over time.
+    unobserved_score: float | None = None
+    elicited_score: float | None = None
     record_sha256: str | None = None
 
-    OPTIONAL_FIELDS = ("observations", "record_sha256")
+    OPTIONAL_FIELDS = (
+        "observations",
+        "unobserved_score",
+        "elicited_score",
+        "record_sha256",
+    )
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "GenerationRecord":
@@ -105,6 +115,18 @@ class GenerationRecord:
                     raise TraceFormatError(
                         f"observation {name} must be a string; record what was seen, not a verdict"
                     )
+        for name, paired in (
+            ("unobserved_score", self.unobserved_score),
+            ("elicited_score", self.elicited_score),
+        ):
+            if paired is None:
+                continue
+            if (
+                not isinstance(paired, (int, float))
+                or isinstance(paired, bool)
+                or not 0 <= paired <= 1
+            ):
+                raise TraceFormatError(f"{name} must be a number between 0 and 1")
         if self.record_sha256 is not None:
             _hex_digest("record_sha256", self.record_sha256)
 

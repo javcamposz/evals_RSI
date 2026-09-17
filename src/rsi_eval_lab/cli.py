@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .compare import compare_regimes, render_comparison
 from .evaluator import Anchors, Invariant, evaluate_trace
+from .gates import DEFAULT_MARGIN, Gate, GateError
 from .integrity import SEAL_ALGORITHM, compute_chain, seal_digest
 from .models import Seal, TraceFormatError, load_trace
 
@@ -41,7 +42,51 @@ def _read_anchors(path: str | None) -> Anchors | None:
         evaluator_sha256=value["evaluator_sha256"],
         monitor_sha256=value["monitor_sha256"],
         invariants=_read_invariants(value.get("invariants", [])),
+        gates=_read_gates(value.get("gates", [])),
     )
+
+
+def _read_gates(declared: object) -> tuple[Gate, ...]:
+    """Gates are declared beside the anchors, for the reason invariants are.
+
+    A run that declared its own loop gates would declare the ones it never approached.
+    """
+    if not isinstance(declared, list):
+        raise TraceFormatError("anchors gates must be a JSON array")
+    gates: list[Gate] = []
+    seen: set[str] = set()
+    for index, item in enumerate(declared):
+        if not isinstance(item, dict):
+            raise TraceFormatError(f"gate {index} must be a JSON object")
+        missing = sorted({"name", "metric", "rolls_back_above"} - item.keys())
+        if missing:
+            raise TraceFormatError(f"gate {index} missing: {', '.join(missing)}")
+        name = item["name"]
+        if not isinstance(name, str) or not name:
+            raise TraceFormatError(f"gate {index} name must be a non-empty string")
+        if name in seen:
+            raise TraceFormatError(f"gate {name} is declared more than once")
+        seen.add(name)
+        threshold = item["rolls_back_above"]
+        if not isinstance(threshold, (int, float)) or isinstance(threshold, bool):
+            raise TraceFormatError(f"gate {name} rolls_back_above must be a number")
+        margin = item.get("margin")
+        if margin is not None and (
+            not isinstance(margin, (int, float)) or isinstance(margin, bool)
+        ):
+            raise TraceFormatError(f"gate {name} margin must be a number")
+        try:
+            gates.append(Gate(
+                name=name,
+                metric=item["metric"],
+                rolls_back_above=float(threshold),
+                margin=DEFAULT_MARGIN if margin is None else float(margin),
+                margin_declared=margin is not None,
+                description=str(item.get("description", "")),
+            ))
+        except GateError as exc:
+            raise TraceFormatError(str(exc)) from exc
+    return tuple(gates)
 
 
 def _read_invariants(declared: object) -> tuple[Invariant, ...]:
@@ -72,13 +117,33 @@ def _read_invariants(declared: object) -> tuple[Invariant, ...]:
     return tuple(invariants)
 
 
+def _challenge_caveat(report) -> str:
+    """The headline numbers are the last reported score, and that is the number in doubt.
+
+    Whether to raise the challenge is decided by asking if the benchmark was saturated,
+    read off the score the run finished on. When the audit below says that score
+    understates the lineage, the recommendation is resting on the disputed figure. The
+    number is not adjusted for it: a recommendation that moved for a reason the reader
+    cannot see would be worse than one that is openly qualified.
+    """
+    reacted = [item for item in report.gate_reactions if item.reacted]
+    if not reacted:
+        return ""
+    names = ", ".join(item.gate.name for item in reacted)
+    best = max(item.best for item in reacted)
+    return (
+        f", read off the last reported score; the run reached {best:.3f} against the "
+        f"{names} gate and this report disputes the later numbers"
+    )
+
+
 def format_report(report) -> str:
     lines = [
         f"Run: {report.run_id}",
         f"Verdict: {report.verdict}",
         f"Held-out delta: {report.holdout_delta:+.3f}",
         f"Efficiency: {report.holdout_delta_per_1k_tokens:+.4f} / 1k tokens",
-        f"Next challenge level: {report.next_challenge_level}",
+        f"Next challenge level: {report.next_challenge_level}{_challenge_caveat(report)}",
     ]
     card = report.scorecard
     if card is not None and card.steps:
@@ -97,6 +162,9 @@ def format_report(report) -> str:
         )
         lines.append(f"Verifier gap: {card.verifier_gap:.3f} at the level the run ended on")
         lines.append(f"Goodhart incidence: {card.goodhart_incidence:.2f} of steps")
+    if report.gate_reactions:
+        lines.append("Declared gates:")
+        lines.extend(f"  {item.summary()}" for item in report.gate_reactions)
     if report.invariant_survival:
         lines.append("Declared invariants:")
         for item in report.invariant_survival:

@@ -36,6 +36,10 @@ CHAINED_FIELDS = (
     "external_processes",
     "audit_log_complete",
     "observations",
+    # A measurement that contradicts the reported score is the one a candidate has most
+    # reason to remove, so it is chained like everything else.
+    "unobserved_score",
+    "elicited_score",
 )
 
 

@@ -15,12 +15,16 @@ from .evaluator import (
     RunReport,
     evaluate_trace,
 )
+from .gates import Gate, GateError, GateReaction, analyse_gate, analyse_gates
 from .integrity import chain_root, compute_chain, record_digest, seal_digest, seal_matches
 from .models import GenerationRecord, RunTrace, Seal, TraceFormatError, load_trace
 from .scorecard import Scorecard, Step, build_scorecard
 
 __all__ = [
     "Anchors",
+    "Gate",
+    "GateError",
+    "GateReaction",
     "Regime",
     "RegimeComparison",
     "EvaluationConfig",
@@ -34,6 +38,8 @@ __all__ = [
     "Step",
     "Seal",
     "TraceFormatError",
+    "analyse_gate",
+    "analyse_gates",
     "build_scorecard",
     "chain_root",
     "compare_regimes",

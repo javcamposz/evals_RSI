@@ -23,7 +23,7 @@
         "action_logging": "full",
         "evaluator_mount": "read-only"
       },
-      "record_sha256": "36a5c0ce28c20897b392b3b7a68b909b1c824b6af454d9efd96f3f7d3942580d"
+      "record_sha256": "98563ca4ab1ddaa6306cf6b20106738b2e0c44393a7eb6e26122df89f520a25b"
     },
     {
       "generation": 1,
@@ -43,8 +43,8 @@
         "action_logging": "partial",
         "evaluator_mount": "read-only"
       },
-      "record_sha256": "7eb9d922c149bd6d620e5abb7aac89774976a920b8765be552adc96c6cd05eb6"
+      "record_sha256": "5eef43fac6fd09b2d9351e74b1180cd209658e7e851d524a0f240f7d41bf132f"
     }
   ],
-  "chain_head": "7eb9d922c149bd6d620e5abb7aac89774976a920b8765be552adc96c6cd05eb6"
+  "chain_head": "5eef43fac6fd09b2d9351e74b1180cd209658e7e851d524a0f240f7d41bf132f"
 }

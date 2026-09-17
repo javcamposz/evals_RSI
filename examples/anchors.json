@@ -17,5 +17,14 @@
       "expected": "read-only",
       "description": "The evaluator directory is mounted read-only for the candidate."
     }
+  ],
+  "gates": [
+    {
+      "name": "capability_rollback",
+      "metric": "holdout_score",
+      "rolls_back_above": 0.82,
+      "margin": 0.05,
+      "description": "A candidate scoring above this is rolled back and not merged."
+    }
   ]
 }

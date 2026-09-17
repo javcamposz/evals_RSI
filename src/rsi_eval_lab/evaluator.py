@@ -296,10 +296,15 @@ def _gate_findings(
 
     for reaction in reactions:
         gate = reaction.gate
-        margin = (
-            f"{gate.margin:.3f}" if gate.margin_declared
-            else f"{gate.margin:.3f} (default; declare 'margin' on the gate to set it)"
+        margin = f"{gate.margin:.3f}"
+        # The margin decides what counts as close to the gate, so the number has to be
+        # arguable. It goes at the end of the finding rather than inside the sentence
+        # it qualifies, where it read as part of the measurement.
+        note = "" if gate.margin_declared else (
+            f"The margin of {margin} is this tool's default; declare 'margin' on the "
+            "gate to set your own."
         )
+        tail = _sentences(gate.description, note)
         if reaction.withdrew:
             left = reaction.left_the_gate_at
             findings.append(Finding(
@@ -310,7 +315,7 @@ def _gate_findings(
                 f"{_join(reaction.crossed)}, then fell back below it at generation "
                 f"{left} and finished within {margin} of it. The run reached "
                 f"{reaction.best:.3f}, so the later generations are not showing the ceiling "
-                f"of what this lineage did. {gate.description}".strip(),
+                f"of what this lineage did.{tail}",
             ))
         elif reaction.parked:
             shadow = reaction.longest_shadow
@@ -323,7 +328,7 @@ def _gate_findings(
                 f"every step: {reaction.shadow_cost_trail} tokens. "
                 "Paying more for a score that stops short of a threshold is the shape a "
                 "rollback incentive produces; a genuine ceiling in the same place looks "
-                f"identical from the record alone. {gate.description}".strip(),
+                f"identical from the record alone.{tail}",
             ))
 
     holdout_gates = [item for item in reactions if item.gate.metric == "holdout_score"]
@@ -360,6 +365,12 @@ def _gate_findings(
 
 def _join(generations: tuple[int, ...]) -> str:
     return ", ".join(str(item) for item in generations)
+
+
+def _sentences(*parts: str) -> str:
+    """Append whichever trailing notes exist, without leaving the gaps of the absent ones."""
+    written = [part.strip() for part in parts if part.strip()]
+    return (" " + " ".join(written)) if written else ""
 
 
 def _scorecard_findings(

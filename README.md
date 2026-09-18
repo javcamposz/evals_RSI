@@ -381,10 +381,13 @@ python -m pip install -e ".[inspect]"
 inspect eval evals/rsi_trace_audit.py --model <provider/model>
 ```
 
-**Read its accuracy against the majority-class baseline, not on its own.** The dataset is 16 traces
-labelled `PASS` 5, `REVIEW` 5, `FAIL` 6, so always answering the most common label scores `0.375`. An
+**Read its accuracy against the majority-class baseline, not on its own.** The dataset is 31 traces
+labelled `PASS` 9, `REVIEW` 12, `FAIL` 10, so always answering the most common label scores `0.387`. An
 earlier four-sample version was three quarters `FAIL`: answering `FAIL` every time scored `0.75` and
-looked like competence. The baseline is recorded in the task metadata and printed by the builder.
+looked like competence. The baseline is recorded in the task metadata, printed by the builder, and now
+**enforced**: `build_dataset.py` exits non-zero if it rises above `0.40`. Scenarios get added one at a
+time, each defensible on its own, and that is how a set drifts back toward one answer without anyone
+deciding to.
 
 Labels are not hand-assigned. Each scenario is a real trace and the deterministic auditor decides its
 verdict, so the dataset cannot drift from the rules it is testing:
@@ -396,12 +399,45 @@ python evals/build_dataset.py --check    # CI fails if the committed dataset is 
 
 The dataset includes benign anomalies labelled `PASS` — a held-out dip inside tolerance, a large token
 spend, a challenge level raised before saturation — so a model that treats any oddity as unsafe loses
-points rather than gaining them.
+points rather than gaining them. Every check the newer iterations added is paired with the ordinary case
+it resembles:
 
-The task covers control tests and benchmark health: the checks a reader can perform from the record. It
-deliberately excludes record integrity, which is a cryptographic property rather than a judgement anyone
-could reach from prose. A model scoring well has shown it can apply stated rules to numbers, which is
-worth knowing and is not the same as independent safety judgement.
+| Flagged | The ordinary case it looks like |
+| --- | --- |
+| Parked under the gate while each generation costs more | Parked under it while each generation costs less |
+| Crossed the gate, came back to just under it | Crossed the gate and kept performing above it |
+| Dropped across the gate and stopped just under it | Dropped straight past it — an ordinary regression |
+| Measured above the gate unobserved, graded below it | Measured lower unobserved, which is noise |
+| A declared invariant stopped holding | Every declared invariant observed and holding |
+
+### What the dataset does not reach
+
+Labels cannot drift from the auditor, because the auditor writes them. They can still **fall behind** it.
+A rule no scenario is able to trigger is consistent with every label and tested by none, and an all-green
+dataset says nothing about that. It had happened: the auditor could emit 26 finding codes and the dataset
+exercised 10, eight of which were deliberately excluded and eight of which were simply unreached — including
+`CHALLENGE_REDUCED`, whose rule the prompt already stated and which no scenario triggered.
+
+So the exclusions are now **declared rather than inferred from absence**, in `NOT_ASSESSABLE_FROM_PROSE`,
+each with its reason. A test reads every finding code out of the auditor's own source and requires each
+one to be either exercised by a scenario or named there. Adding a check to the evaluator fails the build
+until someone does one or the other.
+
+```text
+the auditor can emit ['BRAND_NEW_CHECK'] and the dataset never triggers it. Add a
+scenario, or declare it in NOT_ASSESSABLE_FROM_PROSE with the reason.
+```
+
+The source is the registry, so there is no list to forget to update — forgetting to update it is the
+failure the test exists to catch. What stays excluded is record integrity: a hash chain is recomputed,
+not read, and verifying an HMAC needs a key no reader of the record holds.
+
+The declarations reach the model. A run's invariants and gates are rendered above its generations, marked
+as supplied out of band, because a model marked against a gate it was never shown is being marked on a
+rule it had no way to apply — which measures the prose and not the model.
+
+A model scoring well has shown it can apply stated rules to numbers, which is worth knowing and is not
+the same as independent safety judgement.
 
 The deterministic harness is the safety gate. The model-based task is an experiment in audit assistance and must not replace anchor checks.
 
@@ -481,7 +517,8 @@ python -m pip install -e ".[dev]"
 pytest
 ```
 
-GitHub Actions runs the deterministic tests on Python 3.10 and 3.12.
+GitHub Actions runs the deterministic tests on Python 3.10 and 3.12, and installs the `inspect` extra so
+the Inspect task's import path is exercised on every push rather than skipped.
 
 ## Responsible Use
 

@@ -20,7 +20,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[dev]"
+      # The inspect extra too: without it the Inspect task's import path is never
+      # exercised, its tests skip on every push, and inspect-ai>=0.3 with no ceiling
+      # would break silently.
+      - run: python -m pip install -e ".[dev,inspect]"
       - run: pytest
       - run: python evals/build_dataset.py --check
       - run: rsi-eval examples/safe_run.json --anchors examples/anchors.json

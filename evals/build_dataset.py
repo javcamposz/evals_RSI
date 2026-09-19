@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from evals.dataset import (  # noqa: E402
     DATASET_PATH,
+    MAX_MAJORITY_BASELINE,
     build,
     class_counts,
     majority_baseline,
@@ -44,6 +45,20 @@ def main(argv: list[str] | None = None) -> int:
     samples = build()
     rendered = serialise(samples)
     print(summary(samples))
+
+    # Checked before the staleness comparison, and on a write as well as a --check. A
+    # dataset that has drifted toward one answer rewards guessing it, and the cheapest
+    # way to arrive there is by adding scenarios one at a time, each defensible on its
+    # own, without ever looking at the balance.
+    baseline = majority_baseline(samples)
+    if baseline > MAX_MAJORITY_BASELINE:
+        print(
+            f"majority-class baseline {baseline:.3f} is above the {MAX_MAJORITY_BASELINE:.2f} "
+            "ceiling; answering the commonest label is becoming a strategy. Add scenarios "
+            "for the thinner classes rather than raising the ceiling.",
+            file=sys.stderr,
+        )
+        return 1
 
     if args.check:
         current = DATASET_PATH.read_text() if DATASET_PATH.exists() else ""

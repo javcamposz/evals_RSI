@@ -7,11 +7,17 @@ declaration. It was not.
 
 Comparing a score straight against a threshold is exact, because both sides are decimals
 the file supplied and the same decimal parses to the same double. The trouble is a
-difference the tool computed first: 0.83 - 0.78 is 0.05000000000000004 and 0.60 - 0.55 is
-0.04999999999999999, so two gaps a reader would call identical fall on opposite sides of
-a declared 0.05. Across scores at two decimal places and thresholds from 0.01 to 0.20,
-that put 661 of 1810 exactly-at-the-boundary pairs on the wrong side of the gate margin
-and 654 on the wrong side of the paired-gap tolerance.
+difference the tool computed first:
+
+    >>> 0.83 - 0.78
+    0.04999999999999993
+    >>> 0.55 - 0.50
+    0.050000000000000044
+
+Two gaps a reader would call identical, on opposite sides of a declared 0.05. Across
+scores at two decimal places and thresholds from 0.01 to 0.20, that put 661 of 1810
+exactly-at-the-boundary pairs on the wrong side of the gate margin and 654 on the wrong
+side of the paired-gap tolerance.
 
 `scorecard.py` already avoided this by rounding each difference where it is computed, so
 its plateau boundary was always exact. This states that rule once, at the precision it
@@ -28,11 +34,14 @@ from __future__ import annotations
 COMPARISON_PLACES = 4
 
 
-def difference(larger: float, smaller: float) -> float:
-    """The gap between two scores, at the precision thresholds are compared at.
+def difference(minuend: float, subtrahend: float) -> float:
+    """`minuend - subtrahend`, at the precision thresholds are compared at.
 
     Use this wherever a subtraction is about to meet a declared threshold. Comparing the
     raw subtraction makes the answer depend on which decimals happened to be involved,
     which is not a thing the declaration can be read to say.
+
+    The result keeps its sign and the arguments are not required to be in any order;
+    callers pass the earlier score first and read a rise as negative.
     """
-    return round(larger - smaller, COMPARISON_PLACES)
+    return round(minuend - subtrahend, COMPARISON_PLACES)

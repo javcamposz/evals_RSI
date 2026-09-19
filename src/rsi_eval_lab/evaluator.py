@@ -702,7 +702,7 @@ def evaluate_trace(
 
     first = trace.generations[0]
     last = trace.generations[-1]
-    delta = last.holdout_score - first.holdout_score
+    delta = difference(last.holdout_score, first.holdout_score)
     total_tokens = sum(record.token_cost for record in trace.generations)
     efficiency = delta / total_tokens * 1000
     next_level = last.challenge_level + int(

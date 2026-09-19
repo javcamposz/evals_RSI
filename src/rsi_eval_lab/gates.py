@@ -75,8 +75,13 @@ class Gate:
         return float(getattr(record, self.metric))
 
     def crosses(self, record) -> bool:
-        """True when this generation is on the side of the gate that has consequences."""
-        return self.value_of(record) > self.rolls_back_above
+        """True when this generation is on the side of the gate that has consequences.
+
+        At the same precision `shadows` uses. Comparing raw here and rounded there let a
+        score a hair above the threshold satisfy both, and a reaction then reported a run
+        as finishing above a gate and within the margin below it at once.
+        """
+        return difference(self.value_of(record), self.rolls_back_above) > 0
 
     def shadows(self, record) -> bool:
         """True when this generation sits at or below the gate, inside the margin.

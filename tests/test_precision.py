@@ -195,3 +195,46 @@ def test_a_step_exactly_at_the_plateau_delta_is_not_separated(delta):
         anchors=Anchors("eval-anchor-v1", "monitor-anchor-v1"),
     )
     assert "PLATEAU" in codes(report)
+
+
+# --- both sides of one boundary follow one rule -------------------------------------
+
+@pytest.mark.parametrize("value", [0.8200000001, 0.82000001, 0.8199999999])
+def test_a_score_a_hair_from_a_gate_is_not_both_above_and_below_it(value):
+    """crosses() compared raw while shadows() compared rounded, so a score just over the
+    threshold satisfied both and the reaction claimed the run finished above a gate and
+    within the margin below it at once."""
+    from rsi_eval_lab.gates import analyse_gate
+
+    gate = Gate("g", "holdout_score", 0.82, margin=0.05, margin_declared=True)
+    record = build([value]).generations[0]
+    assert not (gate.crosses(record) and gate.shadows(record))
+    reaction = analyse_gate(build([value]), gate)
+    assert not (reaction.ends_above and reaction.ends_in_shadow)
+
+
+def test_a_score_exactly_on_a_gate_is_under_it_not_over_it():
+    """The gate rolls back what goes *above* the threshold, so landing on it does not."""
+    gate = Gate("g", "holdout_score", 0.82, margin=0.05, margin_declared=True)
+    record = build([0.82]).generations[0]
+    assert not gate.crosses(record)
+    assert gate.shadows(record)
+
+
+def test_both_reported_holdout_deltas_agree():
+    """The run's headline delta and the scorecard's are one quantity; they were computed
+    twice, and only one of them went through the shared rule."""
+    report = evaluate_trace(
+        build([0.55, 0.60, 0.83]), anchors=Anchors("eval-anchor-v1", "monitor-anchor-v1")
+    )
+    assert report.holdout_delta == report.scorecard.holdout_delta
+
+
+def test_the_docstring_example_reproduces():
+    """A module about float arithmetic not behaving as assumed must not state float
+    values from assumption."""
+    from rsi_eval_lab import precision
+
+    assert repr(0.83 - 0.78) in precision.__doc__
+    assert repr(0.55 - 0.50) in precision.__doc__
+    assert (0.83 - 0.78) < 0.05 < (0.55 - 0.50)

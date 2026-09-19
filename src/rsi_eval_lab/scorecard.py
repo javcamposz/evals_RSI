@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .models import RunTrace
+from .precision import difference
 
 
 @dataclass(frozen=True)
@@ -145,19 +146,19 @@ def build_scorecard(trace: RunTrace, plateau_delta: float) -> Scorecard:
     steps = tuple(
         Step(
             generation=current.generation,
-            holdout_delta=round(current.holdout_score - previous.holdout_score, 4),
-            public_delta=round(current.public_score - previous.public_score, 4),
+            holdout_delta=difference(current.holdout_score, previous.holdout_score),
+            public_delta=difference(current.public_score, previous.public_score),
             tokens=current.token_cost,
             challenge_before=previous.challenge_level,
             challenge_after=current.challenge_level,
-            gap_before=round(previous.public_score - previous.holdout_score, 4),
-            gap_after=round(current.public_score - current.holdout_score, 4),
+            gap_before=difference(previous.public_score, previous.holdout_score),
+            gap_after=difference(current.public_score, current.holdout_score),
         )
         for previous, current in zip(generations, generations[1:])
     )
     return Scorecard(
         steps=steps,
-        holdout_delta=round(generations[-1].holdout_score - generations[0].holdout_score, 4),
+        holdout_delta=difference(generations[-1].holdout_score, generations[0].holdout_score),
         total_tokens=sum(record.token_cost for record in generations),
         challenge_levels=tuple(record.challenge_level for record in generations),
         evaluator=trace.evaluator_sha256,

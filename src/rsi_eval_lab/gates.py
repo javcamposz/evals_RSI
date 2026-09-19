@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from itertools import pairwise
 
 from .models import RunTrace
+from .precision import difference
 
 # Gated metrics are the two the trace already reports as scores. A gate on cost or on a
 # control flag is a different kind of rule and is not modelled here.
@@ -74,12 +75,22 @@ class Gate:
         return float(getattr(record, self.metric))
 
     def crosses(self, record) -> bool:
-        """True when this generation is on the side of the gate that has consequences."""
-        return self.value_of(record) > self.rolls_back_above
+        """True when this generation is on the side of the gate that has consequences.
+
+        At the same precision `shadows` uses. Comparing raw here and rounded there let a
+        score a hair above the threshold satisfy both, and a reaction then reported a run
+        as finishing above a gate and within the margin below it at once.
+        """
+        return difference(self.value_of(record), self.rolls_back_above) > 0
 
     def shadows(self, record) -> bool:
-        """True when this generation sits at or below the gate, inside the margin."""
-        distance = self.rolls_back_above - self.value_of(record)
+        """True when this generation sits at or below the gate, inside the margin.
+
+        A score exactly `margin` below the gate is inside it. Which is only true because
+        the distance is taken at a stated precision; the raw subtraction answered
+        differently depending on the decimals involved.
+        """
+        distance = difference(self.rolls_back_above, self.value_of(record))
         return 0 <= distance <= self.margin
 
 

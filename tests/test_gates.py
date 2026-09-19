@@ -556,3 +556,68 @@ def test_the_shadow_finding_shows_the_whole_cost_trail():
     reaction = report.gate_reactions[0]
     assert reaction.shadow_costs == (1400, 1800, 2300)
     assert reaction.shadow_cost_trail == "1400 to 1800 to 2300"
+
+
+# --- a drop through two gates names both of them ----------------------------------------
+
+def _two_gates():
+    outer = Gate("outer", "holdout_score", 0.80, margin=0.05, margin_declared=True)
+    inner = Gate("inner", "holdout_score", 0.78, margin=0.05, margin_declared=True)
+    return Anchors("eval-anchor-v1", "monitor-anchor-v1", (), (outer, inner))
+
+
+def test_a_drop_through_two_gates_names_both():
+    """Naming one left the report silent about a threshold the run also crossed."""
+    report = evaluate_trace(build([0.60, 0.85, 0.75, 0.75]), anchors=_two_gates())
+    text = message(report, "REGRESSION_AT_GATE")
+    assert "outer" in text and "inner" in text
+    assert "gates downwards" in text
+
+
+def test_the_gates_are_named_highest_threshold_first_not_declaration_order():
+    """Which one got named used to depend on the order of the anchors file."""
+    report = evaluate_trace(build([0.60, 0.85, 0.75, 0.75]), anchors=_two_gates())
+    text = message(report, "REGRESSION_AT_GATE")
+    assert text.index("outer") < text.index("inner")
+
+
+def test_a_drop_through_two_gates_is_still_one_finding():
+    report = evaluate_trace(build([0.60, 0.85, 0.75, 0.75]), anchors=_two_gates())
+    assert codes(report).count("REGRESSION_AT_GATE") == 1
+    assert "HOLDOUT_REGRESSION" not in codes(report)
+
+
+def test_one_gate_still_reads_as_one():
+    report = evaluate_trace(build([0.60, 0.85, 0.78, 0.78]), anchors=ANCHORS)
+    assert "gate downwards" in message(report, "REGRESSION_AT_GATE")
+
+
+# --- the challenge caveat speaks about the metric it was computed from -------------------
+
+def test_the_caveat_ignores_a_gate_on_a_metric_the_recommendation_does_not_use():
+    """next_challenge_level comes from holdout_score alone, so the best a public-score
+    gate saw is a different quantity and naming it would report one measurement as
+    evidence about another."""
+    public_only = Gate("pub", "public_score", 0.60, margin=0.05, margin_declared=True)
+    report = evaluate_trace(
+        build([0.40, 0.75, 0.57, 0.57]),
+        anchors=Anchors("eval-anchor-v1", "monitor-anchor-v1", (), (public_only,)),
+    )
+    assert any(item.reacted for item in report.gate_reactions)
+    assert "read off the last reported score" not in format_report(report)
+
+
+def test_the_caveat_reports_the_held_out_best_when_both_kinds_of_gate_reacted():
+    hold = Gate("hold", "holdout_score", 0.60, margin=0.05, margin_declared=True)
+    public = Gate("pub", "public_score", 0.60, margin=0.05, margin_declared=True)
+    report = evaluate_trace(
+        build([0.40, 0.75, 0.57, 0.57]),
+        anchors=Anchors("eval-anchor-v1", "monitor-anchor-v1", (), (hold, public)),
+    )
+    line = next(
+        line for line in format_report(report).splitlines()
+        if line.startswith("Next challenge level:")
+    )
+    assert "0.750" in line          # the held-out maximum
+    assert "0.770" not in line      # the public maximum, which is not what was computed
+    assert "pub" not in line

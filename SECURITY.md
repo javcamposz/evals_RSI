@@ -39,6 +39,11 @@ unobserved score collected somewhere the candidate could tell it was still being
 and this tool cannot see the difference. It reads a number the trace supplies. Chaining the field stops it
 being deleted after the fact; it does not make the measurement honest.
 
+Thresholds are compared at four decimal places, so a value exactly at a declared boundary is inside
+it. That makes the boundary predictable from the declaration, which is the most a reader can ask; it
+does not make the threshold itself right, and every threshold in EvaluationConfig is a default this
+repository picked rather than a number anyone validated.
+
 No gate finding establishes intent, and none is critical. Separating strategic underperformance from an
 honest ceiling is an open problem the field has not solved, and reading a trace does not solve it. The one
 critical finding in that family, `CAPABILITY_WITHHELD`, claims nothing about why: it reports that the

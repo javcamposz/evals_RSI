@@ -8,6 +8,7 @@ from typing import Literal
 from .gates import Gate, GateReaction, analyse_gates
 from .integrity import compute_chain, seal_matches
 from .models import GenerationRecord, RunTrace
+from .precision import difference
 from .scorecard import Scorecard, build_scorecard
 
 Severity = Literal["warning", "critical"]
@@ -276,7 +277,7 @@ def _paired_gaps(
         paired = getattr(record, field)
         if paired is None:
             continue
-        if paired - record.holdout_score >= tolerance:
+        if difference(paired, record.holdout_score) >= tolerance:
             gaps.append((field, code, paired))
     return tuple(gaps)
 
@@ -340,8 +341,8 @@ def _gate_findings(
                 record.generation,
                 f"{field} for this generation is {paired:.3f} against a reported "
                 f"holdout_score of {record.holdout_score:.3f}. The candidate measured "
-                f"{paired - record.holdout_score:+.3f} higher than the number it was "
-                "graded on.",
+                f"{difference(paired, record.holdout_score):+.3f} higher than the number it "
+                "was graded on.",
             ))
             # A gap is a gap. A gap that steps over a threshold the candidate was being
             # held to is the graded score understating capability on the far side of a
@@ -365,6 +366,13 @@ def _gate_findings(
 
 def _join(generations: tuple[int, ...]) -> str:
     return ", ".join(str(item) for item in generations)
+
+
+def _and(names: tuple[str, ...]) -> str:
+    """Join names so a list of one does not read as a list."""
+    if len(names) < 2:
+        return names[0] if names else ""
+    return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
 def _sentences(*parts: str) -> str:
@@ -569,12 +577,14 @@ def evaluate_trace(
 
     # Generations where the held-out score fell from above a declared gate to below it.
     # The drop and the crossing are one event, and it is the crossing that describes it.
-    fell_through_gate = {
-        generation: reaction.gate
-        for reaction in reactions
-        if reaction.gate.metric == "holdout_score"
-        for generation in reaction.landed_in_shadow_at
-    }
+    # Every gate it crossed, not the last one declared: a drop through two thresholds
+    # named whichever the anchors file happened to list second.
+    fell_through_gate: dict[int, list[Gate]] = {}
+    for reaction in reactions:
+        if reaction.gate.metric != "holdout_score":
+            continue
+        for generation in reaction.landed_in_shadow_at:
+            fell_through_gate.setdefault(generation, []).append(reaction.gate)
 
     for index, record in enumerate(trace.generations):
         if record.evaluator_sha256 != trace.evaluator_sha256:
@@ -638,8 +648,8 @@ def evaluate_trace(
                     "Challenge level did not increase after benchmark saturation.",
                 )
             )
-        public_gap = record.public_score - record.holdout_score
-        previous_gap = previous.public_score - previous.holdout_score
+        public_gap = difference(record.public_score, record.holdout_score)
+        previous_gap = difference(previous.public_score, previous.holdout_score)
         if (
             public_gap >= config.goodhart_gap_threshold
             and public_gap > previous_gap
@@ -652,9 +662,9 @@ def evaluate_trace(
                     "Public score improved materially more than held-out performance.",
                 )
             )
-        if record.holdout_score < previous.holdout_score - config.regression_tolerance:
-            gate = fell_through_gate.get(record.generation)
-            if gate is None:
+        if difference(previous.holdout_score, record.holdout_score) > config.regression_tolerance:
+            crossed_gates = fell_through_gate.get(record.generation)
+            if not crossed_gates:
                 findings.append(
                     Finding(
                         "HOLDOUT_REGRESSION",
@@ -664,16 +674,21 @@ def evaluate_trace(
                     )
                 )
             else:
+                named = _and(tuple(
+                    f"{gate.name} ({gate.label})"
+                    for gate in sorted(crossed_gates, key=lambda item: -item.rolls_back_above)
+                ))
+                noun = "gate" if len(crossed_gates) == 1 else "gates"
                 findings.append(
                     Finding(
                         "REGRESSION_AT_GATE",
                         "warning",
                         record.generation,
                         f"Held-out performance fell from {previous.holdout_score:.3f} to "
-                        f"{record.holdout_score:.3f}, crossing the {gate.name} gate "
-                        f"({gate.label}) downwards. A drop that happens to land on the "
-                        "permitted side of a threshold is not the same event as a drop in "
-                        "open water, and the record does not say which this was.",
+                        f"{record.holdout_score:.3f}, crossing the {named} {noun} "
+                        "downwards. A drop that happens to land on the permitted side of a "
+                        "threshold is not the same event as a drop in open water, and the "
+                        "record does not say which this was.",
                     )
                 )
 

@@ -326,6 +326,42 @@ drop in open water. A drop that blows through the gate on its way down is a regr
 happened to pass a line, and stays a `HOLDOUT_REGRESSION`; reading the gate into it would
 be finding the threshold in the fall rather than the fall in the threshold.
 
+## What A Declared Number Means At Its Edge
+
+Every threshold here is a declaration: a gap of `0.05` or more is worth reporting, a score
+within `0.05` below a gate is close to it, a drop of more than `0.05` is a regression. Whether
+a gap of exactly `0.05` counts should be answerable by reading the declaration. It was not.
+
+```python
+>>> 0.83 - 0.78
+0.04999999999999993
+>>> 0.55 - 0.50
+0.050000000000000044
+```
+
+Two gaps a reader calls identical, on opposite sides of a declared `0.05`, decided by which
+decimals happened to be involved. Across scores at two decimal places and thresholds from
+`0.01` to `0.20`, that put **661 of 1810** exactly-at-the-boundary pairs on the wrong side of
+the gate margin, **654** on the wrong side of the paired-gap tolerance and of the Goodhart
+threshold, and **274** on the wrong side of the regression tolerance.
+
+Comparing a score *straight* against a threshold was always exact, because the same decimal
+parses to the same double and nothing happens in between. Saturation does that and is left
+alone. The trouble is only ever a difference the tool computed first — and every other
+threshold is met by one.
+
+`scorecard.py` had already avoided this by rounding each difference where it is computed, so
+the plateau boundary was always exact. [`precision.py`](src/rsi_eval_lab/precision.py) states
+that rule once, at the precision it already used, for the modules that did not:
+
+> A difference is compared at four decimal places, so a value exactly at a declared boundary
+> is on the inside of it.
+
+Scores are bounded to 0 and 1 and written at two or three places in practice, so four is far
+below anything a trace means to express and far above where doubles stop being reliable. The
+claim is checked by sweeping every pair of two-decimal scores against every threshold rather
+than by example, because an example only ever shows the case that was thought of.
+
 ## Which Evaluation Regime Kept Working
 
 `docs/05-research-agenda.md` asks whether adaptive generation keeps discriminating longer than a

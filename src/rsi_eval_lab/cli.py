@@ -126,14 +126,21 @@ def _challenge_caveat(report) -> str:
     number is not adjusted for it: a recommendation that moved for a reason the reader
     cannot see would be worse than one that is openly qualified.
     """
-    reacted = [item for item in report.gate_reactions if item.reacted]
+    # Only gates on holdout_score. The recommendation is computed from the held-out
+    # figure alone, so the best a public-score gate saw is a different quantity and
+    # naming it here would report one measurement as evidence about another.
+    reacted = [
+        item for item in report.gate_reactions
+        if item.reacted and item.gate.metric == "holdout_score"
+    ]
     if not reacted:
         return ""
     names = ", ".join(item.gate.name for item in reacted)
+    noun = "gate" if len(reacted) == 1 else "gates"
     best = max(item.best for item in reacted)
     return (
         f", read off the last reported score; the run reached {best:.3f} against the "
-        f"{names} gate and this report disputes the later numbers"
+        f"{names} {noun} and this report disputes the later numbers"
     )
 
 

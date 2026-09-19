@@ -18,10 +18,12 @@ from .evaluator import (
 from .gates import Gate, GateError, GateReaction, analyse_gate, analyse_gates
 from .integrity import chain_root, compute_chain, record_digest, seal_digest, seal_matches
 from .models import GenerationRecord, RunTrace, Seal, TraceFormatError, load_trace
+from .precision import COMPARISON_PLACES, difference
 from .scorecard import Scorecard, Step, build_scorecard
 
 __all__ = [
     "Anchors",
+    "COMPARISON_PLACES",
     "Gate",
     "GateError",
     "GateReaction",
@@ -44,6 +46,7 @@ __all__ = [
     "chain_root",
     "compare_regimes",
     "compute_chain",
+    "difference",
     "evaluate_trace",
     "load_trace",
     "record_digest",

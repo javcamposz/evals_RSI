@@ -13,8 +13,9 @@ from .evaluator import Anchors, Invariant, evaluate_trace
 from .gates import DEFAULT_MARGIN, Gate, GateError
 from .integrity import SEAL_ALGORITHM, compute_chain, seal_digest
 from .models import Seal, TraceFormatError, load_trace
+from .swarm import SwarmPolicy, compute_swarm_log, evaluate_swarm, format_swarm_report, load_swarm
 
-COMMANDS = ("audit", "compare", "seal")
+COMMANDS = ("audit", "compare", "seal", "swarm", "swarm-seal")
 
 
 def _read_key(path: str | None) -> bytes | None:
@@ -26,15 +27,34 @@ def _read_key(path: str | None) -> bytes | None:
     return key
 
 
-def _read_anchors(path: str | None) -> Anchors | None:
-    if path is None:
-        return None
+def _anchors_file(path: str) -> dict:
     try:
         value = json.loads(Path(path).read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise TraceFormatError(f"unable to load anchors: {exc}") from exc
     if not isinstance(value, dict):
         raise TraceFormatError("anchors file must be a JSON object")
+    return value
+
+
+def _read_swarm_policy(path: str) -> SwarmPolicy:
+    """The swarm's policy lives in the anchors file, for the reason gates and invariants do.
+
+    A swarm that declared its own population cap would declare the size it had reached.
+    """
+    value = _anchors_file(path)
+    if "swarm" not in value:
+        raise TraceFormatError(
+            "anchors file declares no swarm policy; a swarm audit needs founders and a "
+            "population cap declared out of band"
+        )
+    return SwarmPolicy.from_dict(value["swarm"])
+
+
+def _read_anchors(path: str | None) -> Anchors | None:
+    if path is None:
+        return None
+    value = _anchors_file(path)
     missing = sorted({"evaluator_sha256", "monitor_sha256"} - value.keys())
     if missing:
         raise TraceFormatError(f"anchors file missing: {', '.join(missing)}")
@@ -246,6 +266,51 @@ def _seal(args: argparse.Namespace) -> int:
     return 0
 
 
+def _swarm(args: argparse.Namespace) -> int:
+    report = evaluate_swarm(
+        load_swarm(args.swarm),
+        policy=_read_swarm_policy(args.anchors),
+        anchors=_read_anchors(args.anchors),
+        seal_key=_read_key(args.key_file),
+    )
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print(format_swarm_report(report))
+    return 1 if report.verdict == "FAIL" else 0
+
+
+def _swarm_seal(args: argparse.Namespace) -> int:
+    """Chain every member and the swarm log. Run this where no member can reach."""
+    value = json.loads(Path(args.swarm).read_text())
+    swarm = load_swarm(args.swarm)
+    key = _read_key(args.key_file)
+
+    for raw, member in zip(value["members"], swarm.members):
+        digests = compute_chain(member)
+        for record, digest in zip(raw["generations"], digests):
+            record["record_sha256"] = digest
+        raw["chain_head"] = digests[-1]
+        if key is not None:
+            raw["seal"] = Seal(SEAL_ALGORITHM, args.key_id, seal_digest(digests[-1], key)).to_dict()
+        else:
+            raw.pop("seal", None)
+
+    head = compute_swarm_log(swarm)
+    value["log_head"] = head
+    if key is not None:
+        value["seal"] = Seal(SEAL_ALGORITHM, args.key_id, seal_digest(head, key)).to_dict()
+    else:
+        value.pop("seal", None)
+
+    destination = Path(args.output) if args.output else Path(args.swarm)
+    destination.write_text(json.dumps(value, indent=2) + "\n")
+    print(f"Sealed {len(swarm.members)} member lineages and the log of {swarm.swarm_id}")
+    print(f"Log head: {head}")
+    print(f"Written to {destination}")
+    return 0
+
+
 def _compare(args: argparse.Namespace) -> int:
     anchors = _read_anchors(args.anchors)
     key = _read_key(args.key_file)
@@ -320,6 +385,28 @@ def build_parser() -> argparse.ArgumentParser:
     seal.add_argument("--key-file", help="Path to a key for a detached HMAC seal")
     seal.add_argument("--key-id", default="unnamed", help="Identifier recorded alongside the seal")
     seal.set_defaults(handler=_seal)
+
+    swarm = subparsers.add_parser(
+        "swarm", help="audit a swarm of lineages and what happened between them"
+    )
+    swarm.add_argument("swarm", help="Path to a JSON swarm record")
+    swarm.add_argument(
+        "--anchors",
+        required=True,
+        help="anchors file declaring the swarm policy, held outside every member",
+    )
+    swarm.add_argument("--key-file", help="key the members and the swarm log were sealed with")
+    swarm.add_argument("--json", action="store_true", help="emit a machine-readable report")
+    swarm.set_defaults(handler=_swarm)
+
+    swarm_seal = subparsers.add_parser(
+        "swarm-seal", help="chain every member lineage and the swarm log"
+    )
+    swarm_seal.add_argument("swarm", help="Path to a JSON swarm record")
+    swarm_seal.add_argument("-o", "--output", help="where to write it (default: in place)")
+    swarm_seal.add_argument("--key-file", help="key for detached HMAC seals")
+    swarm_seal.add_argument("--key-id", default="unnamed", help="identifier recorded with seals")
+    swarm_seal.set_defaults(handler=_swarm_seal)
 
     return parser
 

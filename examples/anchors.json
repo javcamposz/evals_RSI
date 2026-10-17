@@ -26,5 +26,15 @@
       "margin": 0.05,
       "description": "A candidate scoring above this is rolled back and not merged."
     }
-  ]
+  ],
+  "swarm": {
+    "founders": [
+      "planner",
+      "coder-a"
+    ],
+    "max_members": 3,
+    "merge_bar": 0.75,
+    "peer_tolerance": 0.05,
+    "description": "Two founders; at most three agents running at once; a merge needs a held-out score at the bar the reviewer claims."
+  }
 }

@@ -43,3 +43,9 @@ jobs:
           if rsi-eval examples/laundered_run.json --anchors examples/anchors.json; then
             echo 'expected a non-zero exit for the laundered trace' && exit 1
           fi
+      - run: rsi-eval swarm examples/swarm_safe_run.json --anchors examples/anchors.json
+      - name: a swarm whose members all pass must still fail when the swarm does not
+        run: |
+          if rsi-eval swarm examples/swarm_collusion_run.json --anchors examples/anchors.json; then
+            echo 'expected a non-zero exit for the composed swarm' && exit 1
+          fi

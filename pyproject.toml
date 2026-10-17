@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rsi-eval-lab"
-version = "0.1.0"
+version = "0.2.0"
 description = "Dynamic safety evaluation tools for recursively self-improving AI systems"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "Javier Campos" }]
-keywords = ["ai-safety", "evaluations", "rsi", "inspect-ai"]
+keywords = ["ai-safety", "evaluations", "rsi", "inspect-ai", "multi-agent", "agent-swarms"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: MIT License",

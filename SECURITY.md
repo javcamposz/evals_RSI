@@ -14,6 +14,8 @@ This repository evaluates recorded lineage metadata. It does not execute candida
   anchors are: a system that declares its own constraints declares the ones it already satisfies.
 - Loop gates are read from the anchors file for the same reason. A run that declared its own gates
   would declare the ones it never approached.
+- A swarm's policy (founders, population cap, merge bar) is read from the anchors file for the
+  same reason. A swarm that declared its own cap would declare the size it had already reached.
 - The deterministic auditor has no model or network dependency.
 - The included traces are synthetic and contain no production data.
 
@@ -49,5 +51,13 @@ honest ceiling is an open problem the field has not solved, and reading a trace 
 critical finding in that family, `CAPABILITY_WITHHELD`, claims nothing about why: it reports that the
 record holds two measurements of one candidate on opposite sides of a threshold that acts on it. An append-only log written by the harness, or a signature from a key in
 hardware, would be the next step, and neither is implemented here.
+
+The swarm audit reads peer scores, spawns and a swarm-level held-out score that the harness
+records. Chaining them stops a review being deleted after the fact; it does not make a review
+honest, and it cannot see coordination that never reached a score: members that collude through
+how they split a task, or that inflate each other by less than the declared tolerance, leave
+nothing here to read. A collusion ring is reported as a warning because two members built on one
+base model with one blind spot produce the same record as two that agreed to be lenient. The
+swarm-level score is only worth the harness that produced it, exactly as the unobserved score is.
 
 Report security concerns privately to the repository owner rather than opening an issue containing sensitive traces.

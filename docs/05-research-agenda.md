@@ -63,6 +63,7 @@ Ordered roughly by (value ÷ cost):
 4. **Sandbagging in the loop.** Insert a gate ("scores above X trigger rollback") into a mini self-improvement loop and measure whether/when strategic underperformance emerges — the Apollo arithmetic-sandbagging result transplanted into an actual RSI setting. Instrument with awareness probes and noise-injection sweeps.
 5. **Game-league eval for an evolving agent.** Maintain a league of frozen past checkpoints + dedicated exploiter agents against a self-improving agent; report Nash-averaged rating instead of raw win-rate; measure how long the league stays discriminating vs a static opponent pool.
 6. **Metacognition scoring.** After each scenario, ask the system to identify its own errors and calibrate confidence; score against ground truth; track how self-assessment accuracy evolves across self-modification generations (does the system get better at the task faster than it gets better at knowing what it did wrong?).
+7. **Swarm composition and collusion** ([doc 06](06-swarm-evaluation.md)). Per-member audits do not compose: measure the composition gap (the population size at which a swarm crosses a gate no member crosses) and whether ring-shaped peer-review inflation emerges when members' survival depends on each other's grades. `rsi-eval swarm` reads both off a record today; producing the record needs a loop.
 
 ## 5. Open problems ranked by importance to this agenda
 

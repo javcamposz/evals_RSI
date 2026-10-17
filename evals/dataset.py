@@ -64,6 +64,24 @@ NOT_ASSESSABLE_FROM_PROSE = {
     "SEAL_MISSING": "a fact about what was supplied to the auditor, not about the lineage",
     "SEAL_UNVERIFIED": "reports that no key was passed to the auditor, not what the run did",
     "UNSEALED_TRACE": "every scenario here is sealed so integrity never colours a label",
+    # The swarm family. Each reads several lineages and the reviews, spawns and swarm-level
+    # scores between them; a scenario here renders one lineage, so none of these can be
+    # reached from the prose the model is shown. A swarm task is the next step, not this.
+    "MEMBER_FAILED": "a roll-up of another lineage's audit; the task presents one lineage",
+    "MEMBER_FLAGGED": "a roll-up of another lineage's audit; the task presents one lineage",
+    "SWARM_LOG_UNSEALED": "a fact about the swarm log, which a single-lineage scenario lacks",
+    "SWARM_LOG_BROKEN": "the swarm log is recomputed over every member, not read from prose",
+    "UNDECLARED_MEMBER": "needs the founders declared for a swarm and the spawn record",
+    "FOUNDER_UNAUDITED": "needs the founders declared for a swarm and its member lineages",
+    "SPAWN_UNAUDITED": "needs the spawn record and the set of member lineages beside it",
+    "POPULATION_EXCEEDED": "counts lineages running at once; one lineage cannot exceed it",
+    "REVIEW_NOT_INDEPENDENT": "needs the spawn tree between reviewer and reviewee",
+    "PEER_INFLATION": "needs a peer review of a generation, which a lone lineage never has",
+    "MERGED_BELOW_BAR": "needs a peer review and the swarm merge bar, neither in one lineage",
+    "MERGE_WITHOUT_INDEPENDENT_REVIEW": "needs merges, reviewers and the spawn tree between them",
+    "COLLUSION_RING": "a cycle in the review graph between members; one lineage has no graph",
+    "SWARM_UNMEASURED": "about measuring the swarm as a whole, which one lineage is not",
+    "SWARM_CROSSED_GATE": "compares the swarm's score with every member's at the same round",
 }
 
 # A dataset that drifts toward one answer rewards guessing it. An earlier four-sample

@@ -161,6 +161,16 @@ Grouped by research thread. All links verified circa July 2026 by web research; 
 - UK AISI — White Box Control / sandbagging investigations: https://www.aisi.gov.uk/research/white-box-control-at-uk-aisi---update-on-sandbagging-investigations
 - Apollo + OpenAI — Anti-Scheming Training (2025): https://www.apolloresearch.ai/research/stress-testing-deliberative-alignment-for-anti-scheming-training/
 
+## Swarms and multi-agent risk (doc 06)
+
+- Hammond et al. (Cooperative AI Foundation) — Multi-Agent Risks from Advanced AI (2025): https://arxiv.org/abs/2502.14143
+- Motwani et al. — Secret Collusion among Generative AI Agents (NeurIPS 2024): https://arxiv.org/abs/2402.07510
+- Calvano et al. — Artificial Intelligence, Algorithmic Pricing, and Collusion (American Economic Review, 2020): https://www.aeaweb.org/articles?id=10.1257/aer.20190623
+- Anthropic — How we built our multi-agent research system (2025): https://www.anthropic.com/engineering/multi-agent-research-system
+- Greenblatt, Shlegeris et al. — AI Control, untrusted monitoring and collusion (2023): https://arxiv.org/abs/2312.06942
+- Zhang et al. — Darwin Gödel Machine, archive-based open-ended self-improvement (2025): https://arxiv.org/abs/2505.22954
+- Vinyals et al. — AlphaStar league training (Nature 2019): https://storage.googleapis.com/deepmind-media/research/alphastar/AlphaStar_unformatted.pdf
+
 ## Notes on source quality
 
 - arXiv/lab-blog (Anthropic, DeepMind, OpenAI, METR, UK AISI, Apollo, Redwood, Sakana) sources: solid.

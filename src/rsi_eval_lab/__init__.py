@@ -20,6 +20,17 @@ from .integrity import chain_root, compute_chain, record_digest, seal_digest, se
 from .models import GenerationRecord, RunTrace, Seal, TraceFormatError, load_trace
 from .precision import COMPARISON_PLACES, difference
 from .scorecard import Scorecard, Step, build_scorecard
+from .swarm import (
+    Review,
+    Spawn,
+    SwarmPolicy,
+    SwarmReport,
+    SwarmScore,
+    SwarmTrace,
+    compute_swarm_log,
+    evaluate_swarm,
+    load_swarm,
+)
 
 __all__ = [
     "Anchors",
@@ -39,6 +50,12 @@ __all__ = [
     "Scorecard",
     "Step",
     "Seal",
+    "Review",
+    "Spawn",
+    "SwarmPolicy",
+    "SwarmReport",
+    "SwarmScore",
+    "SwarmTrace",
     "TraceFormatError",
     "analyse_gate",
     "analyse_gates",
@@ -46,8 +63,11 @@ __all__ = [
     "chain_root",
     "compare_regimes",
     "compute_chain",
+    "compute_swarm_log",
     "difference",
+    "evaluate_swarm",
     "evaluate_trace",
+    "load_swarm",
     "load_trace",
     "record_digest",
     "seal_digest",
